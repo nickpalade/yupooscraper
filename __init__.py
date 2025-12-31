@@ -1,1 +1,0 @@
-"""Top‑level package for the Yupoo scraping web application."""

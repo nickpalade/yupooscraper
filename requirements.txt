@@ -5,3 +5,7 @@ beautifulsoup4
 pydantic
 numpy
 opencv-python
+ultralytics
+torch
+transformers
+pillow
