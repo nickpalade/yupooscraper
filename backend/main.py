@@ -280,7 +280,8 @@ def get_external_link(url: str = Query(..., description="The Yupoo album URL")):
 def search_products(
     tags: str = Query(..., description="Comma separated list of tags to search for"),
     sort_by_color: Optional[str] = Query(None, description="DEPRECATED: Use sort_by_colors. Optional color name to sort results by (e.g., 'black', 'red')"),
-    sort_by_colors: Optional[str] = Query(None, description="Comma separated list of color names to sort results by (e.g., 'black,red')")
+    sort_by_colors: Optional[str] = Query(None, description="Comma separated list of color names to sort results by (e.g., 'black,red')"),
+    exclusive_type_search: Optional[bool] = Query(None, description="If true, filters results to include only products with the specified type tags and no other type tags.")
 ):
     """Search for products that contain all of the specified tags.
 
@@ -288,6 +289,7 @@ def search_products(
         tags: Comma separated tags (e.g., "color_red,brightness_dark").
         sort_by_color: DEPRECATED. Optional color name to sort results by percentage (highest first).
         sort_by_colors: Optional comma separated list of color names to sort results by (highest combined percentage first).
+        exclusive_type_search: If true, filters results to include only products with the specified type tags and no other type tags.
 
     Returns:
         A list of matching products, optionally sorted by color intensity.
@@ -302,7 +304,7 @@ def search_products(
     elif sort_by_color: # Fallback to deprecated single sort_by_color
         sort_colors_list = [sort_by_color.strip()]
 
-    results = database.search_products_by_tags(tag_list, sort_by_colors=sort_colors_list)
+    results = database.search_products_by_tags(tag_list, sort_by_colors=sort_colors_list, exclusive_type_search=exclusive_type_search)
     # Convert to response models with translated titles
     return [ProductResponse(
         id=id_,

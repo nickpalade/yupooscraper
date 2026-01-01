@@ -139,18 +139,20 @@ def insert_product(image_url: str, tags: Iterable[str], album_url: str, image_pa
         conn.close()
 
 
-def search_products_by_tags(tag_list: List[str], db_path: str = DB_NAME, sort_by_colors: Optional[List[str]] = None) -> List[Tuple[int, str, str, str, List[str], str, dict]]:
-    """Search for products using category-based OR/AND logic with optional multi-color sorting.
+def search_products_by_tags(tag_list: List[str], db_path: str = DB_NAME, sort_by_colors: Optional[List[str]] = None, exclusive_type_search: Optional[bool] = False) -> List[Tuple[int, str, str, str, List[str], str, dict]]:
+    """Search for products using category-based OR/AND logic with optional multi-color sorting and exclusive type search.
     
     Logic:
     - Tags in the SAME category are OR'd together (e.g., red OR blue)
     - Tags from DIFFERENT categories are AND'd together (e.g., (red OR blue) AND nike)
     - If sort_by_colors is specified, results are sorted by the combined percentage of those colors (highest first).
+    - If exclusive_type_search is True, products will only be returned if they have *only* the specified type tags and no others.
 
     Args:
         tag_list: A list of tags to filter by.
         db_path: Path to the SQLite database file.
         sort_by_colors: Optional list of color names to sort results by (e.g., ["black", "red"]).
+        exclusive_type_search: If true, filters results to include only products with the specified type tags and no other type tags.
 
     Returns:
         A list of tuples representing matching products. Each tuple
@@ -186,8 +188,8 @@ def search_products_by_tags(tag_list: List[str], db_path: str = DB_NAME, sort_by
         # Use JSON_EXTRACT to check if the tag exists in the tags_json array
         or_clauses = []
         for tag in tags:
-            or_clauses.append(f"json_extract(tags_json, '$.*' ) LIKE ?")
-            all_params.append(f'%"{tag}"%')
+            or_clauses.append(f"INSTR(tags_json, ?) > 0")
+            all_params.append(f'"{tag}"')
             
         where_clauses.append(f"({' OR '.join(or_clauses)})")
     
@@ -206,6 +208,25 @@ def search_products_by_tags(tag_list: List[str], db_path: str = DB_NAME, sort_by
         colors_data = json.loads(colors_json) if colors_json else {}
         results.append((product_id, image_url, image_path, album_title, tags, album_url, colors_data))
     
+    # Post-query filtering for exclusive type search
+    if exclusive_type_search and "type" in tag_categories:
+        debug_print("Applying exclusive type search filter.")
+        requested_type_tags = [t for t in tag_categories["type"] if t.startswith("type_")]
+        
+        filtered_results = []
+        for product_tuple in results:
+            product_tags = product_tuple[4] # Index 4 is the tags list
+            product_type_tags = [t for t in product_tags if t.startswith("type_")]
+            
+            # Check if all product_type_tags are in requested_type_tags AND
+            # if the number of product_type_tags matches the number of requested_type_tags
+            # (i.e., no extra type tags present)
+            if all(t in requested_type_tags for t in product_type_tags) and \
+               len(product_type_tags) == len(requested_type_tags):
+                filtered_results.append(product_tuple)
+        results = filtered_results
+        debug_print(f"Exclusive type search reduced results to {len(results)} products.")
+
     # Sort by combined color percentage if specified
     if sort_by_colors and len(sort_by_colors) > 0 and results:
         debug_print(f"Sorting by colors: {sort_by_colors}")
