@@ -77,6 +77,7 @@ const MainContent: React.FC<MainContentProps> = ({
   scrapeProgress,
   exclusiveTypeSearch,
   setExclusiveTypeSearch,
+  performSearch,
 }) => {
   const resultsRef = useRef<HTMLDivElement>(null);
 
