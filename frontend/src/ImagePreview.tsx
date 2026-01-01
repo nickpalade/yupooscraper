@@ -8,19 +8,44 @@ interface ImagePreviewProps {
 
 const ImagePreview: React.FC<ImagePreviewProps> = ({ image, title, onClose }) => {
   const [offsetY, setOffsetY] = useState(0);
-  const [bgOpacity, setBgOpacity] = useState(0.8); // Initial opacity for the background
+  const [scale, setScale] = useState(0.95);
+  const [bgOpacity, setBgOpacity] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  const [isFlinging, setIsFlinging] = useState(false);
+  const [closing, setClosing] = useState(false);
   const dragStartRef = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
-  const backdropRef = useRef<HTMLDivElement>(null);
 
-  // --- Drag Handlers ---
+  // --- Animation and Lifecycle ---
+
+  // Initial animation on mount
+  useEffect(() => {
+    setScale(1);
+    setBgOpacity(1);
+  }, []);
+
+  // Close with zoom-out animation for click/ESC
+  const handleClose = () => {
+    if (closing) return;
+    setClosing(true);
+    setScale(0.95);
+    setBgOpacity(0);
+    setTimeout(onClose, 300); // Unmount after animation
+  };
+
+  // Listen for ESC key
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleClose();
+    };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, []);
+
+  // --- Drag/Swipe Handlers ---
+
   const handleDragStart = (clientY: number) => {
-    // Remove transitions so the drag is instant
+    if (closing) return;
     if (containerRef.current) containerRef.current.style.transition = 'none';
-    if (backdropRef.current) backdropRef.current.style.transition = 'none';
-    
     setIsDragging(true);
     dragStartRef.current = clientY;
   };
@@ -29,9 +54,8 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ image, title, onClose }) =>
     if (!isDragging) return;
     const deltaY = clientY - dragStartRef.current;
     setOffsetY(deltaY);
-
-    // Fade out the background as the user drags
-    const newOpacity = Math.max(0, 0.8 - (Math.abs(deltaY) / 500)); // 500 is drag distance for full fade
+    // As user drags, fade out the background
+    const newOpacity = Math.max(0, 1 - Math.abs(deltaY) / 400);
     setBgOpacity(newOpacity);
   };
 
@@ -39,25 +63,21 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ image, title, onClose }) =>
     if (!isDragging) return;
     setIsDragging(false);
 
-    // Re-apply transitions for the snap-back or fling animation
-    const transition = 'transform 0.3s ease-out, opacity 0.3s ease-out';
-    if (containerRef.current) containerRef.current.style.transition = transition;
-    if (backdropRef.current) backdropRef.current.style.transition = 'opacity 0.3s ease-out';
+    // Re-apply transition for snap-back or fling
+    if (containerRef.current) containerRef.current.style.transition = 'transform 0.3s ease-out';
     
-    const swipeThreshold = 100; // Min distance in px to trigger a close
+    const swipeThreshold = 100;
     if (Math.abs(offsetY) > swipeThreshold) {
-      // Fling and close
-      setIsFlinging(true);
-      // Move image further down (or up) off the screen
+      // Fling close
+      setClosing(true);
+      // Animate it off-screen
       setOffsetY(offsetY + Math.sign(offsetY) * window.innerHeight);
       setBgOpacity(0);
-      
-      // Call onClose after the fling animation finishes
-      setTimeout(onClose, 300);
+      setTimeout(onClose, 300); // Unmount after animation
     } else {
       // Snap back to center
       setOffsetY(0);
-      setBgOpacity(0.8);
+      setBgOpacity(1);
     }
   };
 
@@ -66,76 +86,47 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ image, title, onClose }) =>
     e.preventDefault();
     handleDragStart(e.clientY);
   };
-
   const handlePointerMove = (e: React.PointerEvent) => {
     e.preventDefault();
-    if(isDragging) handleDragMove(e.clientY);
+    if (isDragging) handleDragMove(e.clientY);
   };
-
   const handlePointerUp = (e: React.PointerEvent) => {
     e.preventDefault();
     handleDragEnd();
   };
 
-  // Handle ESC key to close preview modal
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        handleClose();
-      }
-    };
-    document.addEventListener('keydown', handleEsc);
-    return () => document.removeEventListener('keydown', handleEsc);
-  }, [onClose]);
-
-  // When closing (e.g. by clicking X or backdrop), animate out
-  const handleClose = () => {
-    if (containerRef.current) {
-        containerRef.current.style.opacity = '0';
-        containerRef.current.style.transform = 'scale(0.8)';
-    }
-    if (backdropRef.current) {
-        backdropRef.current.style.opacity = '0';
-    }
-    setTimeout(onClose, 300);
-  }
-
   return (
     <div
-      ref={backdropRef}
-      className={`fixed inset-0 z-50 flex items-center justify-center ${isFlinging ? 'pointer-events-none' : ''}`}
-      style={{ 
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{
         backgroundColor: `rgba(0, 0, 0, ${bgOpacity * 0.5})`,
-        backdropFilter: `blur(${bgOpacity * 20}px)`,
-        transition: isDragging ? 'none' : 'backdrop-filter 0.3s ease-out, background-color 0.3s ease-out'
+        backdropFilter: `blur(${bgOpacity * 16}px)`,
+        transition: isDragging ? 'none' : 'background-color 0.3s ease-out, backdrop-filter 0.3s ease-out',
       }}
-      onClick={isFlinging ? undefined : handleClose}
+      onClick={handleClose}
     >
-      {/* Modal Content - Draggable Container */}
       <div
         ref={containerRef}
-        className="relative flex flex-col items-center justify-center animate-zoomIn"
-        onClick={(e) => e.stopPropagation()} // Prevents clicks inside from closing modal
+        className="relative flex flex-col items-center justify-center"
+        onClick={(e) => e.stopPropagation()}
         style={{
-          transform: `translateY(${offsetY}px)`,
-          touchAction: 'none'
+          transform: `translateY(${offsetY}px) scale(${scale})`,
+          touchAction: 'none',
+          opacity: bgOpacity, // Link opacity to background for a cohesive feel
+          transition: isDragging ? 'none' : 'transform 0.3s ease-out, opacity 0.3s ease-out',
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp} // Use onPointerUp for cancel as well
+        onPointerCancel={handlePointerUp}
       >
-        {/* Image Container with Close Button */}
         <div className="relative inline-block">
-          {/* Close Button - positioned on the image */}
           <button
             onClick={handleClose}
             className="absolute z-10 flex items-center justify-center w-12 h-12 text-3xl text-white transition-colors bg-black bg-opacity-50 rounded-full top-4 right-4 hover:text-gray-300"
           >
             ✕
           </button>
-
-          {/* Image */}
           <img
             src={image}
             alt={title || "Preview"}
@@ -146,7 +137,6 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ image, title, onClose }) =>
           />
         </div>
 
-        {/* Title */}
         {title && (
           <div className="mt-6 text-center">
             <p className="max-w-2xl text-xl font-semibold text-white">
@@ -155,25 +145,10 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ image, title, onClose }) =>
           </div>
         )}
 
-        {/* Press ESC hint */}
         <div className="absolute text-sm text-gray-400 transform -translate-x-1/2 bottom-4 left-1/2">
           Press ESC to close
         </div>
       </div>
-
-      {/* CSS for initial open animations */}
-      <style>{`
-        @keyframes fadeIn {
-          from { background-color: rgba(0, 0, 0, 0); }
-          to { background-color: rgba(0, 0, 0, 0.8); }
-        }
-        @keyframes zoomIn {
-          from { transform: scale(0.5); opacity: 0; }
-          to { transform: scale(1); opacity: 1; }
-        }
-        .animate-fadeIn { animation: fadeIn 0.2s ease-in-out; }
-        .animate-zoomIn { animation: zoomIn 0.2s ease-out; }
-      `}</style>
     </div>
   );
 };

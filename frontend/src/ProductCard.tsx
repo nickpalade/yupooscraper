@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Search } from 'lucide-react';
 import { useSettings } from './SettingsContext';
@@ -9,6 +9,7 @@ interface ProductCardProps {
     product: Product;
     onImageClick: (image: string, title:string) => void;
     mobileGridCols: number;
+    index: number;
 }
 
 function buildAllChinaBuyUrl(productUrl: string): string {
@@ -33,7 +34,7 @@ const isMobile = (): boolean => {
 };
 
 
-const ProductCard: React.FC<ProductCardProps> = ({ product, onImageClick, mobileGridCols }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ product, onImageClick, mobileGridCols, index }) => {
     const [isFetchingLink, setIsFetchingLink] = useState(false);
     const { settings } = useSettings();
     const tagSettings = settings.tags;
@@ -93,11 +94,14 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onImageClick, mobile
 
     return (
         <div
-            className="flex flex-col overflow-hidden transition-shadow glass-container"
+            className="flex flex-col overflow-hidden transition-shadow glass-container animate-fadeInUp"
             style={{
                 backgroundColor: 'var(--card-bg)',
                 borderColor: 'var(--border-color)',
-                boxShadow: 'var(--card-shadow)'
+                boxShadow: 'var(--card-shadow)',
+                animationDelay: `${index * 50}ms`,
+                animationFillMode: 'forwards',
+                opacity: 0, // Start with opacity 0, animation will take it to 1
             }}
         >
             <div
