@@ -10,6 +10,7 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ image, title, onClose }) =>
   const [offsetY, setOffsetY] = useState(0);
   const [scale, setScale] = useState(0.95);
   const [bgOpacity, setBgOpacity] = useState(0);
+  const [imageOpacity, setImageOpacity] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [closing, setClosing] = useState(false);
   const dragStartRef = useRef(0);
@@ -21,6 +22,7 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ image, title, onClose }) =>
   useEffect(() => {
     setScale(1);
     setBgOpacity(1);
+    setImageOpacity(1);
   }, []);
 
   // Close with zoom-out animation for click/ESC
@@ -29,6 +31,7 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ image, title, onClose }) =>
     setClosing(true);
     setScale(0.95);
     setBgOpacity(0);
+    setImageOpacity(0);
     setTimeout(onClose, 300); // Unmount after animation
   };
 
@@ -54,9 +57,9 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ image, title, onClose }) =>
     if (!isDragging) return;
     const deltaY = clientY - dragStartRef.current;
     setOffsetY(deltaY);
-    // As user drags, fade out the background
-    const newOpacity = Math.max(0, 1 - Math.abs(deltaY) / 400);
-    setBgOpacity(newOpacity);
+    // As user drags, fade out the background ONLY
+    const newBgOpacity = Math.max(0, 1 - Math.abs(deltaY) / 400);
+    setBgOpacity(newBgOpacity);
   };
 
   const handleDragEnd = () => {
@@ -70,7 +73,7 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ image, title, onClose }) =>
     if (Math.abs(offsetY) > swipeThreshold) {
       // Fling close
       setClosing(true);
-      // Animate it off-screen
+      // Animate it off-screen - image opacity remains 1
       setOffsetY(offsetY + Math.sign(offsetY) * window.innerHeight);
       setBgOpacity(0);
       setTimeout(onClose, 300); // Unmount after animation
@@ -112,7 +115,7 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ image, title, onClose }) =>
         style={{
           transform: `translateY(${offsetY}px) scale(${scale})`,
           touchAction: 'none',
-          opacity: bgOpacity, // Link opacity to background for a cohesive feel
+          opacity: imageOpacity,
           transition: isDragging ? 'none' : 'transform 0.3s ease-out, opacity 0.3s ease-out',
         }}
         onPointerDown={handlePointerDown}
@@ -145,9 +148,7 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ image, title, onClose }) =>
           </div>
         )}
 
-        <div className="absolute text-sm text-gray-400 transform -translate-x-1/2 bottom-4 left-1/2">
-          Press ESC to close
-        </div>
+        
       </div>
     </div>
   );

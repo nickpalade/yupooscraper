@@ -160,11 +160,19 @@ body {
     border-radius: 0.25rem; /* Assuming rounded-md for buttons, adjust if needed */
   }
 
-  /* Hover state: darken button slightly */
-  button.glass-button:hover:not(.glow-color):not(.glow-type):not(.glow-brand),
-  a.glass-button:hover:not(.glow-color):not(.glow-type):not(.glow-brand) {
+  /* Hover state for devices that can hover */
+  @media (hover: hover) {
+    button.glass-button:hover:not(.glow-color):not(.glow-type):not(.glow-brand),
+    a.glass-button:hover:not(.glow-color):not(.glow-type):not(.glow-brand) {
+      filter: brightness(0.8);
+      border-color: rgba(79, 70, 229, 0.5);
+    }
+  }
+
+  /* Active state for touch feedback */
+  button.glass-button:active:not(.glow-color):not(.glow-type):not(.glow-brand),
+  a.glass-button:active:not(.glow-color):not(.glow-type):not(.glow-brand) {
     filter: brightness(0.8);
-    border-color: rgba(79, 70, 229, 0.5);
   }
 
   /* Category-specific glow buttons - removed glow effects for efficiency */
