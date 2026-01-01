@@ -103,8 +103,12 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ image, title, onClose }) =>
   return (
     <div
       ref={backdropRef}
-      className={`fixed inset-0 z-50 flex items-center justify-center bg-black animate-fadeIn ${isFlinging ? 'pointer-events-none' : ''}`}
-      style={{ backgroundColor: `rgba(0, 0, 0, ${bgOpacity})` }}
+      className={`fixed inset-0 z-50 flex items-center justify-center ${isFlinging ? 'pointer-events-none' : ''}`}
+      style={{ 
+        backgroundColor: `rgba(0, 0, 0, ${bgOpacity * 0.5})`,
+        backdropFilter: `blur(${bgOpacity * 20}px)`,
+        transition: isDragging ? 'none' : 'backdrop-filter 0.3s ease-out, background-color 0.3s ease-out'
+      }}
       onClick={isFlinging ? undefined : handleClose}
     >
       {/* Modal Content - Draggable Container */}
@@ -121,23 +125,26 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ image, title, onClose }) =>
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp} // Use onPointerUp for cancel as well
       >
-        {/* Close Button */}
-        <button
-          onClick={handleClose}
-          className="absolute z-10 flex items-center justify-center w-12 h-12 text-3xl text-white transition-colors bg-black bg-opacity-50 rounded-full top-4 right-4 hover:text-gray-300"
-        >
-          ✕
-        </button>
+        {/* Image Container with Close Button */}
+        <div className="relative inline-block">
+          {/* Close Button - positioned on the image */}
+          <button
+            onClick={handleClose}
+            className="absolute z-10 flex items-center justify-center w-12 h-12 text-3xl text-white transition-colors bg-black bg-opacity-50 rounded-full top-4 right-4 hover:text-gray-300"
+          >
+            ✕
+          </button>
 
-        {/* Image */}
-        <img
-          src={image}
-          alt={title || "Preview"}
-          className="max-h-[80vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
-          onError={(e) => {
-            e.currentTarget.src = 'https://via.placeholder.com/800?text=Image+Not+Found';
-          }}
-        />
+          {/* Image */}
+          <img
+            src={image}
+            alt={title || "Preview"}
+            className="max-h-[80vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+            onError={(e) => {
+              e.currentTarget.src = 'https://via.placeholder.com/800?text=Image+Not+Found';
+            }}
+          />
+        </div>
 
         {/* Title */}
         {title && (

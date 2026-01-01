@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { useSettings, AppSettings } from './SettingsContext';
+import { Search } from 'lucide-react';
+import { useSettings } from './SettingsContext';
+import type { AppSettings } from './SettingsContext';
 import { Product, TagCategory, categorizeAndFormatTags } from './types';
 
 interface ProductCardProps {
@@ -91,11 +93,17 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onImageClick, mobile
 
     return (
         <div
-            className="flex flex-col overflow-hidden transition-shadow bg-white rounded-lg shadow-md hover:shadow-xl"
+            className="flex flex-col overflow-hidden transition-shadow glass-container"
+            style={{
+                backgroundColor: 'var(--card-bg)',
+                borderColor: 'var(--border-color)',
+                boxShadow: 'var(--card-shadow)'
+            }}
         >
             <div
-                className="relative w-full overflow-hidden bg-gray-100 cursor-pointer aspect-square group"
+                className="relative w-full overflow-hidden cursor-pointer aspect-square group"
                 onClick={handleImageClick}
+                style={{ backgroundColor: 'var(--card-bg)' }}
             >
                 <img
                     src={product.image_path ? product.image_path : product.image_url}
@@ -106,26 +114,27 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onImageClick, mobile
                     }}
                     loading="lazy"
                 />
-                <div className="absolute inset-0 flex items-center justify-center transition-all duration-300 bg-black bg-opacity-0 group-hover:bg-opacity-30">
-                    <span className="text-3xl text-white transition-opacity duration-300 opacity-0 group-hover:opacity-100">
-                        🔍
-                    </span>
+                <div 
+                    className="absolute inset-0 flex items-center justify-center transition-opacity duration-300 group-hover:bg-opacity-30"
+                    style={{ backgroundColor: 'rgba(0, 0, 0, 0)' }}
+                >
+                    <Search size={40} className="transition-opacity duration-300 opacity-0 group-hover:opacity-100" style={{ color: 'var(--button-text)' }} />
                 </div>
             </div>
             <div className={`flex flex-col flex-1 ${paddingClass}`}>
                 {(() => {
                     const categories = categorizeAndFormatTags(product.tags);
-                    const brandText = categories.company.length > 0 ? categories.company[0] : null;
+                    const brandText = categories.brand.length > 0 ? categories.brand[0] : null;
 
                     return (
                         <>
                             {brandText && (
-                                <h3 className="mb-2 text-sm font-semibold text-blue-900 line-clamp-1">
+                                <h3 className="mb-2 text-sm font-semibold line-clamp-1" style={{ color: 'var(--text-color)' }}>
                                     {brandText}
                                 </h3>
                             )}
                             {!brandText && product.album_title && (
-                                <h3 className="mb-2 text-sm font-semibold text-gray-800 line-clamp-2">
+                                <h3 className="mb-2 text-sm font-semibold line-clamp-2" style={{ color: 'var(--text-color)' }}>
                                     {product.album_title}
                                 </h3>
                             )}
@@ -136,19 +145,14 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onImageClick, mobile
                 <div className="mb-3">
                     {(() => {
                         const categories = categorizeAndFormatTags(product.tags);
-                        const categoryColors: Record<keyof TagCategory, string> = {
-                            color: 'bg-purple-100 text-purple-800',
-                            type: 'bg-blue-100 text-blue-800',
-                            company: 'bg-red-100 text-red-800',
-                        };
                         const categoryLabels: Record<keyof TagCategory, string> = {
-                            color: 'Color', type: 'Type', company: 'Brand',
+                            color: 'Color', type: 'Type', brand: 'Brand',
                         };
 
                         const SETTING_TO_CATEGORY_MAP: { [K in keyof AppSettings['tags']]: keyof TagCategory } = {
                             showColor: 'color',
                             showType: 'type',
-                            showCompany: 'company',
+                            showCompany: 'brand', // Changed from 'company' to 'brand'
                         };
 
                         const visibleCategories = (Object.keys(tagSettings) as Array<keyof AppSettings['tags']>)
@@ -160,7 +164,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onImageClick, mobile
                                 {visibleCategories.map((category) =>
                                     categories[category].length > 0 ? (
                                         <div key={category}>
-                                            <p className={`mb-1 font-bold text-gray-600 uppercase ${labelSizeClass}`}>
+                                            <p className={`mb-1 font-bold uppercase ${labelSizeClass}`} style={{ color: 'var(--text-color)' }}>
                                                 {categoryLabels[category]}:
                                             </p>
                                             <div className="flex flex-wrap gap-1">
@@ -179,7 +183,12 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onImageClick, mobile
                                                     return (
                                                         <span
                                                             key={idx}
-                                                            className={`inline-block ${categoryColors[category]} ${tagSizeClass} rounded whitespace-nowrap`}
+                                                            className={`inline-block glass-button glow-${category} ${tagSizeClass} rounded whitespace-nowrap`}
+                                                            style={{
+                                                                backgroundColor: `var(--tag-${category}-bg)`,
+                                                                color: `var(--tag-${category}-text)`,
+                                                                borderColor: `var(--tag-${category}-bg)`, // Border color same as background for a more unified look
+                                                            }}
                                                             title={percentage !== null ? `${percentage.toFixed(1)}% of image` : ''}
                                                         >
                                                             {tag}
@@ -200,14 +209,24 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onImageClick, mobile
                         href={product.album_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="w-full px-3 py-2 text-xs font-semibold text-center text-white transition-colors bg-blue-600 rounded md:flex-1 hover:bg-blue-700"
+                        className="w-full px-3 py-2 text-xs font-semibold text-center glass-button md:flex-1"
+                        style={{
+                            backgroundColor: 'var(--primary-color)',
+                            color: 'var(--button-text)',
+                            borderColor: 'var(--glass-border)',
+                        }}
                     >
                         Yupoo
                     </a>
                     <button
                         onClick={handleAllChinaBuyClick}
                         disabled={isFetchingLink}
-                        className="w-full px-3 py-2 text-xs font-semibold text-center text-white transition-colors bg-green-600 rounded md:flex-1 hover:bg-green-700 disabled:bg-gray-400"
+                        className="w-full px-3 py-2 text-xs font-semibold text-center glass-button md:flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{
+                            backgroundColor: 'var(--allchinabuy-color)',
+                            color: 'var(--button-text)',
+                            borderColor: 'var(--glass-border)',
+                        }}
                     >
                         {isFetchingLink ? 'Fetching...' : 'AllChinaBuy'}
                     </button>

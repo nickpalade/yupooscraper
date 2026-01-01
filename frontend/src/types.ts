@@ -12,7 +12,7 @@ export interface Product {
 export interface TagCategory {
     color: string[];
     type: string[];
-    company: string[];
+    brand: string[]; // Changed from 'company' to 'brand'
 }
 
 export const formatTag = (tag: string): string => {
@@ -28,7 +28,7 @@ export const categorizeAndFormatTags = (tags: string[]): TagCategory => {
     const categories: TagCategory = {
         color: [],
         type: [],
-        company: [],
+        brand: [], // Changed from 'company' to 'brand'
     };
 
     tags.forEach(tag => {
@@ -37,7 +37,7 @@ export const categorizeAndFormatTags = (tags: string[]): TagCategory => {
         } else if (tag.startsWith('type_')) {
             categories.type.push(formatTag(tag));
         } else if (tag.startsWith('company_')) {
-            categories.company.push(formatTag(tag));
+            categories.brand.push(formatTag(tag)); // Pushing to 'brand'
         }
     });
 

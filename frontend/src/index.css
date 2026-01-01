@@ -2,4 +2,195 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom global styles can go here */
+:root {
+  /* Light theme colors */
+  --bg-color: #f0f2f5;
+  --bg-gradient-from: #e2e8f0;
+  --bg-gradient-via: #f0f2f5;
+  --bg-gradient-to: #e2e8f0;
+  --text-color: #1a202c;
+  --primary-color: #4f46e5;
+  --secondary-color: #6366f1;
+  --accent-color: #ec4899;
+  --border-color: #cbd5e1;
+  --glass-bg: rgba(255, 255, 255, 0.3); /* Even more transparent */
+  --glass-border: rgba(255, 255, 255, 0.5);
+  --glass-shadow: rgba(0, 0, 0, 0.15);
+  --glass-hover-bg: rgba(255, 255, 255, 0.4); /* New hover background for glass elements */
+  --input-bg: #ffffff;
+  --input-border: #e2e8f0;
+  --input-text: #1a202c;
+  --button-bg: #4f46e5;
+  --button-text: #ffffff;
+  --button-hover-bg: #6366f1;
+  --card-bg: #ffffff;
+  --card-shadow: rgba(0, 0, 0, 0.08);
+
+  /* Tag colors - Light Theme */
+  --tag-color-bg: rgba(167, 139, 250, 0.2); /* purple-300 */
+  --tag-color-text: #6d28d9; /* purple-800 */
+  --tag-type-bg: rgba(96, 165, 250, 0.2); /* blue-300 */
+  --tag-type-text: #1e40af; /* blue-800 */
+  --tag-brand-bg: rgba(239, 68, 68, 0.4); /* red-500 - more saturated */
+  --tag-brand-text: #7f1d1d; /* red-900 */
+  --allchinabuy-color: #00BEBE; /* RGB 0, 190, 190 */
+
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  /* Dark theme colors */
+  --bg-color: #1a202c;
+  --bg-gradient-from: #1e293b;
+  --bg-gradient-via: #0f172a;
+  --bg-gradient-to: #1e293b;
+  --text-color: #f8fafc;
+  --primary-color: #818cf8;
+  --secondary-color: #a78bfa;
+  --accent-color: #f472b6;
+  --border-color: #334155;
+  --glass-bg: rgba(30, 41, 59, 0.3); /* Even more transparent */
+  --glass-border: rgba(71, 85, 105, 0.5);
+  --glass-shadow: rgba(0, 0, 0, 0.5);
+  --glass-hover-bg: rgba(30, 41, 59, 0.4); /* New hover background for glass elements */
+  --input-bg: #2d3748;
+  --input-border: #4a5568;
+  --input-text: #f8fafc;
+  --button-bg: #4338ca;
+  --button-text: #ffffff;
+  --button-hover-bg: #4f46e5;
+  --card-bg: #2d3748;
+  --card-shadow: rgba(0, 0, 0, 0.3);
+
+  /* Tag colors - Dark Theme */
+  --tag-color-bg: rgba(167, 139, 250, 0.3);
+  --tag-color-text: #d8b4fe; /* purple-300 */
+  --tag-type-bg: rgba(96, 165, 250, 0.3);
+  --tag-type-text: #93c5fd; /* blue-300 */
+  --tag-brand-bg: rgba(239, 68, 68, 0.5); /* red-500 - more saturated */
+  --tag-brand-text: #fecaca; /* red-200 */
+  --allchinabuy-color: #00BEBE; /* RGB 0, 190, 190 */
+
+  color-scheme: dark;
+}
+
+html {
+  height: 100%;
+  background-color: var(--bg-color);
+  margin: 0;
+  padding: 0;
+  transition: background-color 0.3s ease;
+}
+
+body {
+  height: 100%;
+  background-color: var(--bg-color);
+  margin: 0;
+  padding: 0;
+  color: var(--text-color);
+  transition: background-color 0.3s ease, color 0.3s ease;
+  overscroll-behavior: contain;
+}
+
+#root {
+  background-color: var(--bg-color);
+  min-height: 100vh;
+}
+
+/* Keyframe animations for glow effects - static glow (no repeating animation) */
+@keyframes glowFade {
+  from {
+    box-shadow: 0 0 15px rgba(79, 70, 229, 0.3);
+  }
+  to {
+    box-shadow: 0 0 15px rgba(79, 70, 229, 0.3);
+  }
+}
+
+@keyframes glowFadeColor {
+  from {
+    box-shadow: 0 0 15px rgba(167, 139, 250, 0.3);
+  }
+  to {
+    box-shadow: 0 0 15px rgba(167, 139, 250, 0.3);
+  }
+}
+
+@keyframes glowFadeType {
+  from {
+    box-shadow: 0 0 15px rgba(96, 165, 250, 0.3);
+  }
+  to {
+    box-shadow: 0 0 15px rgba(96, 165, 250, 0.3);
+  }
+}
+
+@keyframes glowFadeBrand {
+  from {
+    box-shadow: 0 0 15px rgba(252, 165, 165, 0.3);
+  }
+  to {
+    box-shadow: 0 0 15px rgba(252, 165, 165, 0.3);
+  }
+}
+
+@keyframes glowHover {
+  from {
+    box-shadow: 0 0 25px rgba(79, 70, 229, 0.3);
+  }
+  to {
+    box-shadow: 0 0 40px rgba(79, 70, 229, 0.5), 0 20px 25px -5px rgba(79, 70, 229, 0.2);
+  }
+}
+
+/* Glow effects for buttons and interactive elements */
+@layer components {
+  .glass-container {
+    background-color: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 0.75rem; /* rounded-xl */
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04), inset 0 1px 1px 0 rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(16px); /* Stronger blur */
+  }
+  
+  .glass-button {
+    background-color: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    transition: background-color 0.3s ease-in-out, border-color 0.3s ease, filter 0.3s ease; /* Specific transitions */
+    border-radius: 0.25rem; /* Assuming rounded-md for buttons, adjust if needed */
+  }
+
+  /* Hover state: darken button slightly */
+  button.glass-button:hover:not(.glow-color):not(.glow-type):not(.glow-brand),
+  a.glass-button:hover:not(.glow-color):not(.glow-type):not(.glow-brand) {
+    filter: brightness(0.8);
+    border-color: rgba(79, 70, 229, 0.5);
+  }
+
+  /* Category-specific glow buttons - removed glow effects for efficiency */
+  .glass-button.glow-color,
+  .glass-button.glow-type,
+  .glass-button.glow-brand {
+    pointer-events: auto;
+    cursor: default;
+    backdrop-filter: blur(4px);
+  }
+
+  .glass-input {
+    backdrop-filter: blur(12px); /* Slightly less blur than container for readability */
+    background-color: var(--input-bg);
+    border: 1px solid var(--input-border);
+    box-shadow: 0 1px 3px 0 var(--glass-shadow), 0 1px 2px -1px var(--glass-shadow), inset 0 1px 1px 0 rgba(255, 255, 255, 0.1); /* subtle shadow */
+    transition: all 0.3s ease;
+  }
+  
+  .glass-input:focus {
+    box-shadow: 0 1px 3px 0 var(--glass-shadow), inset 0 1px 1px 0 rgba(255, 255, 255, 0.2);
+    border-color: rgba(79, 70, 229, 0.5);
+    filter: brightness(1.05);
+  }
+
+  .safe-area {
+    padding-top: env(safe-area-inset-top);
+  }
+}

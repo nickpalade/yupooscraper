@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Home, Zap, Settings as SettingsIcon } from 'lucide-react';
 
-const NavigationBar: React.FC = () => {
-  const location = useLocation();
+interface NavigationBarProps {
+  currentTab: 'home' | 'scraper';
+  setCurrentTab: (tab: 'home' | 'scraper') => void;
+  onSettingsClick: () => void;
+}
+
+const NavigationBar: React.FC<NavigationBarProps> = ({ currentTab, setCurrentTab, onSettingsClick }) => {
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
-      // themeMeta is no longer used here as dynamic theme-color is removed
-      // Always update isScrolled
       if (window.scrollY > 1) {
         setIsScrolled(true);
       } else {
@@ -17,43 +20,79 @@ const NavigationBar: React.FC = () => {
     };
 
     window.addEventListener('scroll', handleScroll);
-    // Call handleScroll once on mount to set initial state
     handleScroll();
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []); // Empty dependency array means this useEffect runs once on mount and cleanup on unmount
+  }, []);
 
-  const getLinkClass = (path: string) => {
-    return `px-4 py-2 rounded-lg font-semibold transition-all text-sm ${
-      location.pathname === path
-        ? 'bg-blue-600 text-white shadow-md'
-        : 'bg-gray-700 text-gray-200 hover:bg-gray-600 hover:text-white'
+  const getTabClass = (tab: 'home' | 'scraper') => {
+    return `glass-button px-4 py-2 rounded-lg font-semibold transition-colors duration-300 text-sm flex items-center gap-2 ${
+      currentTab === tab
+        ? 'shadow-lg' // Apply shadow directly if active
+        : ''
     }`;
   };
 
-  // This wrapper will handle the initial margin and animation to full width
   const wrapperClasses = `
-    fixed inset-x-0 z-50 transition-all duration-300 bg-white shadow-[0_4px_8px_rgba(0,0,0,0.2)]
-    ${isScrolled
-      ? 'top-0 rounded-none py-2' // Fixed at top, no rounded corners, smaller padding
-      : 'top-2 mx-4 rounded-lg py-4' // Fixed, but slightly down from top, with horizontal margins, rounded corners, larger padding
-    }
+    fixed inset-x-0 z-50 glass-container
+    ${isScrolled ? 'rounded-none' : 'rounded-xl'}
   `;
 
+  const wrapperStyles: React.CSSProperties = {
+    top: isScrolled ? 0 : 8,
+    marginLeft: isScrolled ? 0 : 16,
+    marginRight: isScrolled ? 0 : 16,
+    paddingTop: isScrolled ? 8 : 16,
+    paddingBottom: isScrolled ? 8 : 16,
+    transition: 'all 300ms ease-in-out',
+  };
+
   return (
-    <div className={wrapperClasses.trim()}>
+    <div className={wrapperClasses.trim()} style={wrapperStyles}>
       <div className="container flex flex-col items-center justify-between mx-auto sm:flex-row">
         <div className="flex items-center mb-4 text-center sm:text-left sm:mb-0">
           <img src="/icon.png" alt="Yupoo Scraper Logo" className="w-8 h-8 mr-2" />
-          <h1 className="text-2xl font-bold text-black">Yupoo Scraper</h1>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-color)' }}>Yupoo Scraper</h1>
         </div>
 
         <div className="flex gap-4">
-          <Link to="/" className={getLinkClass('/')}>
+          <button
+            onClick={() => setCurrentTab('home')}
+            className={`${getTabClass('home')}`}
+            style={{
+              backgroundColor: currentTab === 'home' ? 'var(--primary-color)' : 'var(--glass-bg)',
+              color: currentTab === 'home' ? 'var(--button-text)' : 'var(--text-color)',
+              borderColor: 'var(--glass-border)',
+              transition: 'all 300ms ease-in-out',
+            }}
+          >
+            <Home size={20} />
             Home
-          </Link>
-          <Link to="/settings" className={getLinkClass('/settings')}>
-            Settings
-          </Link>
+          </button>
+          <button
+            onClick={() => setCurrentTab('scraper')}
+            className={`${getTabClass('scraper')}`}
+            style={{
+              backgroundColor: currentTab === 'scraper' ? 'var(--primary-color)' : 'var(--glass-bg)',
+              color: currentTab === 'scraper' ? 'var(--button-text)' : 'var(--text-color)',
+              borderColor: 'var(--glass-border)',
+              transition: 'all 300ms ease-in-out',
+            }}
+          >
+            <Zap size={20} />
+            Scraper
+          </button>
+          <button
+            onClick={onSettingsClick}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold glass-button"
+            style={{
+              backgroundColor: 'var(--accent-color)',
+              color: 'var(--button-text)',
+              borderColor: 'var(--glass-border)',
+              transition: 'all 300ms ease-in-out',
+            }}
+          >
+            <SettingsIcon size={20} />
+          </button>
         </div>
       </div>
     </div>
