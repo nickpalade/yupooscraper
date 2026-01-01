@@ -139,18 +139,18 @@ def insert_product(image_url: str, tags: Iterable[str], album_url: str, image_pa
         conn.close()
 
 
-def search_products_by_tags(tag_list: List[str], db_path: str = DB_NAME, sort_by_color: Optional[str] = None) -> List[Tuple[int, str, str, str, List[str], str, dict]]:
-    """Search for products using category-based OR/AND logic with optional color sorting.
+def search_products_by_tags(tag_list: List[str], db_path: str = DB_NAME, sort_by_colors: Optional[List[str]] = None) -> List[Tuple[int, str, str, str, List[str], str, dict]]:
+    """Search for products using category-based OR/AND logic with optional multi-color sorting.
     
     Logic:
     - Tags in the SAME category are OR'd together (e.g., red OR blue)
     - Tags from DIFFERENT categories are AND'd together (e.g., (red OR blue) AND nike)
-    - If sort_by_color is specified, results are sorted by that color's percentage
+    - If sort_by_colors is specified, results are sorted by the combined percentage of those colors (highest first).
 
     Args:
         tag_list: A list of tags to filter by.
         db_path: Path to the SQLite database file.
-        sort_by_color: Optional color name to sort results by (e.g., "black", "red")
+        sort_by_colors: Optional list of color names to sort results by (e.g., ["black", "red"]).
 
     Returns:
         A list of tuples representing matching products. Each tuple
@@ -162,12 +162,12 @@ def search_products_by_tags(tag_list: List[str], db_path: str = DB_NAME, sort_by
     # Group tags by their category prefix
     tag_categories = {}
     for tag in tag_list:
-        # Extract category (everything before the last underscore)
+        # Extract category (everything before the first underscore for clarity in tagging)
         parts = tag.split('_')
-        if len(parts) >= 2:
-            category = '_'.join(parts[:-1])  # e.g., "color" from "color_red"
-        else:
-            category = tag
+        if len(parts) > 1: # e.g., "color_red" -> "color"
+            category = parts[0] 
+        else: # plain tag without prefix
+            category = "misc" # or some default category
         
         if category not in tag_categories:
             tag_categories[category] = []
@@ -182,9 +182,14 @@ def search_products_by_tags(tag_list: List[str], db_path: str = DB_NAME, sort_by
     
     for category, tags in tag_categories.items():
         # For each category, create an OR clause
-        or_clauses = [f"tags_json LIKE ?" for _ in tags]
+        # Ensure we match the full tag to avoid partial matches (e.g., "red" matching "dark_red")
+        # Use JSON_EXTRACT to check if the tag exists in the tags_json array
+        or_clauses = []
+        for tag in tags:
+            or_clauses.append(f"json_extract(tags_json, '$.*' ) LIKE ?")
+            all_params.append(f'%"{tag}"%')
+            
         where_clauses.append(f"({' OR '.join(or_clauses)})")
-        all_params.extend([f'%"{tag}"%' for tag in tags])
     
     # Join all category groups with AND
     where_clause = " AND ".join(where_clauses)
@@ -201,10 +206,11 @@ def search_products_by_tags(tag_list: List[str], db_path: str = DB_NAME, sort_by
         colors_data = json.loads(colors_json) if colors_json else {}
         results.append((product_id, image_url, image_path, album_title, tags, album_url, colors_data))
     
-    # Sort by color percentage if specified
-    if sort_by_color and results:
+    # Sort by combined color percentage if specified
+    if sort_by_colors and len(sort_by_colors) > 0 and results:
+        debug_print(f"Sorting by colors: {sort_by_colors}")
         results.sort(
-            key=lambda x: x[6].get(sort_by_color, 0),
+            key=lambda x: sum(x[6].get(color.lower(), 0) for color in sort_by_colors),
             reverse=True
         )
     

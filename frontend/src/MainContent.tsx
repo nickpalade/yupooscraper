@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Search, Eye, Trash2, Loader, BarChart3 } from 'lucide-react';
+import { Search, Eye, Trash2, Loader } from 'lucide-react'; // Removed BarChart3
 import TagSearchSection from './TagSearchSection';
 import ProductCard from './ProductCard';
 import Pagination from './Pagination';
@@ -22,8 +22,8 @@ interface MainContentProps {
   searchLoading: boolean;
   searchError: string | null;
   Array: any;
-  sortByColor: string | null;
-  setSortByColor: (color: string | null) => void;
+  sortByColor: string[]; // Changed from string | null to string[]
+  setSortByColor: (color: string[]) => void; // Changed from string | null to string[]
   products: Product[];
   showViewAll: boolean;
   currentPage: number;
@@ -129,43 +129,6 @@ const MainContent: React.FC<MainContentProps> = ({
               </button>
             </form>
 
-            {Array.from(selectedTags).some((tag: string) => tag.startsWith('color_')) && (
-              <div className="p-4 mt-4 glass-container">
-                <h3 className="flex items-center gap-2 mb-3 text-sm font-semibold" style={{ color: 'var(--text-color)' }}><BarChart3 size={18} /> Sort by Color Intensity</h3>
-                <div className="space-y-2">
-                  <button
-                    onClick={() => {
-                      const colorTag = Array.from(selectedTags).find((tag: string) => tag.startsWith('color_'));
-                      if (colorTag) {
-                        const colorName = (colorTag as string).replace('color_', '');
-                        setSortByColor(colorName);
-                      }
-                    }}
-                    className={`w-full py-2 px-3 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2 glass-button ${
-                      sortByColor ? 'shadow-lg' : ''
-                    }`}
-                    style={{
-                      backgroundColor: sortByColor ? 'var(--primary-color)' : 'var(--glass-bg)',
-                      color: 'var(--text-color)',
-                      borderColor: 'var(--glass-border)',
-                    }}
-                  >
-                    <BarChart3 size={16} /> Most to Least {Array.from(selectedTags).find((tag: string) => tag.startsWith('color_'))?.replace('color_', '').toUpperCase()}
-                  </button>
-                  {sortByColor && (
-                    <button onClick={() => setSortByColor(null)} className="w-full px-3 py-2 text-sm font-medium glass-button"
-                      style={{
-                        backgroundColor: 'rgba(239, 68, 68, 0.4)', // Red-500/40
-                        color: 'var(--button-text)',
-                        borderColor: 'var(--glass-border)',
-                      }}
-                    >
-                      ✕ Clear Sorting
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
             {searchError && <div className="flex items-center gap-2 p-4 mt-4 rounded-lg" style={{ backgroundColor: 'var(--card-bg)', color: 'var(--text-color)', border: '1px solid var(--border-color)' }}>⚠️ {searchError}</div>}
             <div className="pt-6 mt-6" style={{ borderColor: 'var(--border-color)', borderTopWidth: '1px' }}>
               <h3 className="mb-4 text-lg font-semibold" style={{ color: 'var(--text-color)' }}>Quick Actions</h3>

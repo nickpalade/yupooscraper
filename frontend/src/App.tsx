@@ -76,9 +76,9 @@ const App: React.FC = () => {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
-  const [sortByColor, setSortByColor] = useState<string | null>(null);  // Color to sort by
+  const [sortByColor, setSortByColor] = useState<string[]>([]);  // Color(s) to sort by
   const [allTags, setAllTags] = useState<string[]>([]);
-  const [tagsLoading, setTagsLoading] = useState(true);
+  const [tagsLoading, setTagsLoading] = useState(true); // Re-added tagsLoading state
 
   // --- State with localStorage Persistence ---
   const [showViewAll, setShowViewAll] = useState(() => localStorage.getItem('yupooScraper_showViewAll') === 'true');
@@ -136,9 +136,8 @@ const App: React.FC = () => {
             const tagsArray = Array.from(selectedTags).join(',');
             const params: any = { tags: tagsArray };
             
-            const colorTags = Array.from(selectedTags).filter(tag => tag.startsWith('color_'));
-            if (colorTags.length > 0 && sortByColor) {
-              params.sort_by_color = sortByColor;
+            if (sortByColor.length > 0) {
+              params.sort_by_colors = sortByColor.join(',');
             }
             
             const response = await axios.get<Product[]>(`/api/products`, { params });
@@ -259,15 +258,16 @@ const App: React.FC = () => {
     try {
       if (tagsToSearch.size === 0) {
         setSearchLoading(false);
+        // If no tags are selected, also clear sortByColor
+        setSortByColor([]);
         return;
       }
 
       const tagsArray = Array.from(tagsToSearch).join(',');
       const params: any = { tags: tagsArray };
       
-      const colorTags = Array.from(tagsToSearch).filter(tag => tag.startsWith('color_'));
-      if (colorTags.length > 0 && sortByColor) {
-        params.sort_by_color = sortByColor;
+      if (sortByColor.length > 0) {
+        params.sort_by_colors = sortByColor.join(',');
       }
       
       const response = await axios.get<Product[]>(`/api/products`, { params });
@@ -286,6 +286,11 @@ const App: React.FC = () => {
     e.preventDefault();
     setShowViewAll(false);
     setCurrentPage(1);
+
+    // Determine color tags from selectedTags for sorting
+    const currentSelectedColorTags = Array.from(selectedTags).filter(tag => tag.startsWith('color_')).map(tag => tag.replace('color_', ''));
+    setSortByColor(currentSelectedColorTags);
+
     await performSearch(selectedTags);
   };
 
@@ -299,6 +304,11 @@ const App: React.FC = () => {
     setSelectedTags(newSelected);
     setCurrentPage(1); // Reset to page 1 when filtering changes
     setShowViewAll(false);
+
+    // Automatically set sortByColor based on selected color tags
+    const currentSelectedColorTags = Array.from(newSelected).filter(t => t.startsWith('color_')).map(t => t.replace('color_', ''));
+    setSortByColor(currentSelectedColorTags);
+
     // Auto-search with the new tag selection
     setTimeout(() => {
       performSearch(newSelected);
@@ -374,6 +384,10 @@ const App: React.FC = () => {
     setSelectedTags(newSelected);
     setCurrentPage(1);
     setShowViewAll(false);
+
+    const currentSelectedColorTags = Array.from(newSelected).filter(t => t.startsWith('color_')).map(t => t.replace('color_', ''));
+    setSortByColor(currentSelectedColorTags);
+
     performSearch(newSelected);
 };
 
