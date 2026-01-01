@@ -38,6 +38,9 @@ interface MainContentProps {
   clearingDatabase: boolean;
   clearDatabaseMessage: string | null;
   scrapeProgress: any;
+  exclusiveTypeSearch: boolean;
+  setExclusiveTypeSearch: (exclusive: boolean) => void;
+  performSearch: (tagsToSearch: Set<string>) => Promise<void>;
 }
 
 const MainContent: React.FC<MainContentProps> = ({
@@ -72,6 +75,8 @@ const MainContent: React.FC<MainContentProps> = ({
   clearingDatabase,
   clearDatabaseMessage,
   scrapeProgress,
+  exclusiveTypeSearch,
+  setExclusiveTypeSearch,
 }) => {
   const resultsRef = useRef<HTMLDivElement>(null);
 
@@ -111,6 +116,9 @@ const MainContent: React.FC<MainContentProps> = ({
               setTypeSearchQuery={setTypeSearchQuery}
               brandSearchQuery={brandSearchQuery}
               setBrandSearchQuery={setBrandSearchQuery}
+              exclusiveTypeSearch={exclusiveTypeSearch}
+              setExclusiveTypeSearch={setExclusiveTypeSearch}
+              performSearch={performSearch}
             />
 
             <form onSubmit={handleSearch} className="space-y-4">

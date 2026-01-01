@@ -13,6 +13,9 @@ interface TagSearchSectionProps {
   setTypeSearchQuery: (query: string) => void;
   brandSearchQuery: string;
   setBrandSearchQuery: (query: string) => void;
+  exclusiveTypeSearch: boolean;
+  setExclusiveTypeSearch: (exclusive: boolean) => void;
+  performSearch: (tagsToSearch: Set<string>) => Promise<void>;
 }
 
 const TagSearchSection: React.FC<TagSearchSectionProps> = ({
@@ -26,6 +29,9 @@ const TagSearchSection: React.FC<TagSearchSectionProps> = ({
   setTypeSearchQuery,
   brandSearchQuery,
   setBrandSearchQuery,
+  exclusiveTypeSearch,
+  setExclusiveTypeSearch,
+  performSearch,
 }) => {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     color: false,
@@ -64,6 +70,13 @@ const TagSearchSection: React.FC<TagSearchSectionProps> = ({
     if (catKey === 'colorSearchQuery') setColorSearchQuery(value);
     if (catKey === 'typeSearchQuery') setTypeSearchQuery(value);
     if (catKey === 'brandSearchQuery') setBrandSearchQuery(value);
+  };
+
+  const handleExclusiveTypeSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const isChecked = e.target.checked;
+    setExclusiveTypeSearch(isChecked);
+    // Trigger search with the current selected tags
+    performSearch(selectedTags);
   };
 
   return (
@@ -128,6 +141,22 @@ const TagSearchSection: React.FC<TagSearchSectionProps> = ({
                       boxShadow: 'var(--glass-shadow)',
                     }}
                   />
+
+                  {cat === 'type' && (
+                    <div className="flex items-center mt-2">
+                      <input
+                        type="checkbox"
+                        id="exclusiveTypeSearch"
+                        checked={exclusiveTypeSearch}
+                        onChange={handleExclusiveTypeSearchChange}
+                        className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                        style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--input-border)' }}
+                      />
+                      <label htmlFor="exclusiveTypeSearch" className="text-sm cursor-pointer" style={{ color: 'var(--text-color)' }}>
+                        Exclusive Type Search
+                      </label>
+                    </div>
+                  )}
 
                   {cat === 'brand' ? (
                     // Alphabetical grouping for brands

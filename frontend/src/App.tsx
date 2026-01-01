@@ -79,6 +79,7 @@ const App: React.FC = () => {
   const [sortByColor, setSortByColor] = useState<string[]>([]);  // Color(s) to sort by
   const [allTags, setAllTags] = useState<string[]>([]);
   const [tagsLoading, setTagsLoading] = useState(true); // Re-added tagsLoading state
+  const [exclusiveTypeSearch, setExclusiveTypeSearch] = useState<boolean>(false);
 
   // --- State with localStorage Persistence ---
   const [showViewAll, setShowViewAll] = useState(() => localStorage.getItem('yupooScraper_showViewAll') === 'true');
@@ -269,6 +270,9 @@ const App: React.FC = () => {
       if (sortByColor.length > 0) {
         params.sort_by_colors = sortByColor.join(',');
       }
+      if (exclusiveTypeSearch) {
+        params.exclusive_type_search = exclusiveTypeSearch;
+      }
       
       const response = await axios.get<Product[]>(`/api/products`, { params });
       setProducts(response.data);
@@ -400,43 +404,45 @@ const App: React.FC = () => {
       />
       <div className="container px-0 py-8 pt-40 mx-auto md:pt-28">
         {currentTab === 'home' ? (
-          <MainContent
-            tagsLoading={tagsLoading}
-            allTags={allTags}
-            selectedTags={selectedTags}
-            toggleTag={toggleTag}
-            clearSelectedTags={clearSelectedTags}
-            colorSearchQuery={colorSearchQuery}
-            setColorSearchQuery={setColorSearchQuery}
-            typeSearchQuery={typeSearchQuery}
-            setTypeSearchQuery={setTypeSearchQuery}
-            brandSearchQuery={brandSearchQuery}
-            setBrandSearchQuery={setBrandSearchQuery}
-            handleSearch={handleSearch}
-            handleSimilarSearch={handleSimilarSearch}
-            searchLoading={searchLoading}
-            searchError={searchError}
-            Array={Array}
-            sortByColor={sortByColor}
-            setSortByColor={setSortByColor}
-            products={products}
-            showViewAll={showViewAll}
-            currentPage={currentPage}
-            setCurrentPage={setCurrentPage}
-            itemsPerPage={itemsPerPage}
-            setItemsPerPage={setItemsPerPage}
-            mobileGridCols={mobileGridCols}
-            setMobileGridCols={setMobileGridCols}
-            onImageClick={onImageClick}
-            handleViewAll={handleViewAll}
-            handleClearDatabase={handleClearDatabase}
-            clearingDatabase={clearingDatabase}
-            clearDatabaseMessage={clearDatabaseMessage}
-            scrapeProgress={scrapeProgress}
-          />
-        ) : (
-          <ScraperGUI
-            scrapeUrl={scrapeUrl}
+                      <MainContent
+                      tagsLoading={tagsLoading}
+                      allTags={allTags}
+                      selectedTags={selectedTags}
+                      toggleTag={toggleTag}
+                      clearSelectedTags={clearSelectedTags}
+                      colorSearchQuery={colorSearchQuery}
+                      setColorSearchQuery={setColorSearchQuery}
+                      typeSearchQuery={typeSearchQuery}
+                      setTypeSearchQuery={setTypeSearchQuery}
+                      brandSearchQuery={brandSearchQuery}
+                      setBrandSearchQuery={setBrandSearchQuery}
+                      handleSearch={handleSearch}
+                      handleSimilarSearch={handleSimilarSearch}
+                      searchLoading={searchLoading}
+                      searchError={searchError}
+                      Array={Array}
+                      sortByColor={sortByColor}
+                      setSortByColor={setSortByColor}
+                      products={products}
+                      showViewAll={showViewAll}
+                      currentPage={currentPage}
+                      setCurrentPage={setCurrentPage}
+                      itemsPerPage={itemsPerPage}
+                      setItemsPerPage={setItemsPerPage}
+                      mobileGridCols={mobileGridCols}
+                      setMobileGridCols={setMobileGridCols}
+                      onImageClick={onImageClick}
+                      handleViewAll={handleViewAll}
+                      handleClearDatabase={handleClearDatabase}
+                      clearingDatabase={clearingDatabase}
+                      clearDatabaseMessage={clearDatabaseMessage}
+                      scrapeProgress={scrapeProgress}
+                      exclusiveTypeSearch={exclusiveTypeSearch}
+                      setExclusiveTypeSearch={setExclusiveTypeSearch}
+                      performSearch={performSearch}
+                    />
+                  ) : (
+                    <ScraperGUI            scrapeUrl={scrapeUrl}
             setScrapeUrl={setScrapeUrl}
             maxAlbums={maxAlbums}
             setMaxAlbums={setMaxAlbums}
