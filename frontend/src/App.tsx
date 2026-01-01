@@ -358,6 +358,25 @@ const App: React.FC = () => {
     setPreviewTitle(title);
   }, []);
 
+  const handleSimilarSearch = (product: Product, sameBrand: boolean) => {
+    const newSelected = new Set<string>();
+    const colorTags = product.tags.filter(tag => tag.startsWith('color_'));
+    const typeTags = product.tags.filter(tag => tag.startsWith('type_'));
+
+    colorTags.forEach(tag => newSelected.add(tag));
+    typeTags.forEach(tag => newSelected.add(tag));
+
+    if (sameBrand) {
+        const brandTags = product.tags.filter(tag => tag.startsWith('company_'));
+        brandTags.forEach(tag => newSelected.add(tag));
+    }
+
+    setSelectedTags(newSelected);
+    setCurrentPage(1);
+    setShowViewAll(false);
+    performSearch(newSelected);
+};
+
   return (
     <div className="min-h-screen safe-area">
       <NavigationBar 
@@ -380,6 +399,7 @@ const App: React.FC = () => {
             brandSearchQuery={brandSearchQuery}
             setBrandSearchQuery={setBrandSearchQuery}
             handleSearch={handleSearch}
+            handleSimilarSearch={handleSimilarSearch}
             searchLoading={searchLoading}
             searchError={searchError}
             Array={Array}

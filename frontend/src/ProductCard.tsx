@@ -8,6 +8,7 @@ import { Product, TagCategory, categorizeAndFormatTags } from './types';
 interface ProductCardProps {
     product: Product;
     onImageClick: (image: string, title:string) => void;
+    handleSimilarSearch: (product: Product, sameBrand: boolean) => void;
     mobileGridCols: number;
     index: number;
 }
@@ -34,7 +35,7 @@ const isMobile = (): boolean => {
 };
 
 
-const ProductCard: React.FC<ProductCardProps> = ({ product, onImageClick, mobileGridCols, index }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ product, onImageClick, handleSimilarSearch, mobileGridCols, index }) => {
     const [isFetchingLink, setIsFetchingLink] = useState(false);
     const { settings } = useSettings();
     const tagSettings = settings.tags;
@@ -208,33 +209,55 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onImageClick, mobile
                         );
                     })()}
                 </div>
-                <div className="flex flex-col items-center gap-2 mt-auto md:flex-row">
-                    <a
-                        href={product.album_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full px-3 py-2 text-xs font-semibold text-center glass-button md:flex-1"
-                        style={{
-                            backgroundColor: 'var(--primary-color)',
-                            color: 'var(--button-text)',
-                            borderColor: 'var(--glass-border)',
-                        }}
-                    >
-                        Yupoo
-                    </a>
-                    <button
-                        onClick={handleAllChinaBuyClick}
-                        disabled={isFetchingLink}
-                        className="w-full px-3 py-2 text-xs font-semibold text-center glass-button md:flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                        style={{
-                            backgroundColor: 'var(--allchinabuy-color)',
-                            color: 'var(--button-text)',
-                            borderColor: 'var(--glass-border)',
-                        }}
-                    >
-                        {isFetchingLink ? 'Fetching...' : 'AllChinaBuy'}
-                    </button>
-                </div>
+                <div className="grid grid-cols-2 gap-2 mt-auto">
+    <button
+        onClick={() => handleSimilarSearch(product, true)}
+        className="w-full px-3 py-2 text-xs font-semibold text-center glass-button"
+        style={{
+            backgroundColor: 'var(--primary-color)',
+            color: 'var(--button-text)',
+            borderColor: 'var(--glass-border)',
+        }}
+    >
+        Find Similar
+    </button>
+    <button
+        onClick={() => handleSimilarSearch(product, false)}
+        className="w-full px-3 py-2 text-xs font-semibold text-center glass-button"
+        style={{
+            backgroundColor: 'var(--primary-color)',
+            color: 'var(--button-text)',
+            borderColor: 'var(--glass-border)',
+        }}
+    >
+        Find Similar (Any Brand)
+    </button>
+    <a
+        href={product.album_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="w-full px-3 py-2 text-xs font-semibold text-center glass-button"
+        style={{
+            backgroundColor: 'var(--primary-color)',
+            color: 'var(--button-text)',
+            borderColor: 'var(--glass-border)',
+        }}
+    >
+        Yupoo
+    </a>
+    <button
+        onClick={handleAllChinaBuyClick}
+        disabled={isFetchingLink}
+        className="w-full px-3 py-2 text-xs font-semibold text-center glass-button disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{
+            backgroundColor: 'var(--allchinabuy-color)',
+            color: 'var(--button-text)',
+            borderColor: 'var(--glass-border)',
+        }}
+    >
+        {isFetchingLink ? 'Fetching...' : 'AllChinaBuy'}
+    </button>
+</div>
             </div>
         </div>
     );

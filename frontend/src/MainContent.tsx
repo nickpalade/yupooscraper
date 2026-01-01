@@ -18,6 +18,7 @@ interface MainContentProps {
   brandSearchQuery: string;
   setBrandSearchQuery: (query: string) => void;
   handleSearch: (e: React.FormEvent) => void;
+  handleSimilarSearch: (product: Product, sameBrand: boolean) => void;
   searchLoading: boolean;
   searchError: string | null;
   Array: any;
@@ -52,6 +53,7 @@ const MainContent: React.FC<MainContentProps> = ({
   brandSearchQuery,
   setBrandSearchQuery,
   handleSearch,
+  handleSimilarSearch,
   searchLoading,
   searchError,
   sortByColor,
@@ -265,6 +267,7 @@ const MainContent: React.FC<MainContentProps> = ({
                   key={product.id}
                   product={product}
                   onImageClick={onImageClick}
+                  handleSimilarSearch={handleSimilarSearch}
                   mobileGridCols={mobileGridCols}
                   index={index}
                 />
