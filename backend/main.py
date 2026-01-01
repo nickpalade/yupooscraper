@@ -373,3 +373,26 @@ def clear_database_endpoint():
         "message": f"Database cleared. {deleted} products deleted.",
         "deleted_count": deleted
     }
+
+@app.post("/api/colors/adjust-grey", summary="Adjust grey color percentages")
+def adjust_grey_percentages_endpoint():
+    """
+    Adjusts the 'grey' or 'gray' color percentages across all products in the database.
+    This process calculates the average grey percentage and then normalizes
+    each product's color data based on this average.
+
+    Returns:
+        A dictionary containing statistics about the adjustment.
+    """
+    debug_print("=== ADJUST GREY PERCENTAGES REQUEST ===")
+    try:
+        adjustment_summary = database.adjust_grey_percentages()
+        debug_print(f"Grey percentage adjustment complete: {adjustment_summary}")
+        return {
+            "status": "success",
+            "message": "Grey color percentages adjusted successfully.",
+            "summary": adjustment_summary
+        }
+    except Exception as e:
+        debug_print(f"ERROR adjusting grey percentages: {e}")
+        raise HTTPException(status_code=500, detail=f"An error occurred during grey percentage adjustment: {str(e)}")

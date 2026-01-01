@@ -1,5 +1,5 @@
-import React from 'react';
-import { Loader, Download, AlertCircle, CheckCircle, FileText, RotateCw, Image, Target, AlertTriangle, MapPin } from 'lucide-react';
+import React, { useState } from 'react';
+import { Loader, Download, AlertCircle, CheckCircle, FileText, RotateCw, Image, Target, AlertTriangle, MapPin, Palette } from 'lucide-react';
 
 interface ScrapeProgress {
     type: 'info' | 'progress' | 'success' | 'error' | 'complete' |
@@ -54,6 +54,32 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
     handleScrape,
     exponentialSliderToValue,
 }) => {
+  const [adjustingColorsLoading, setAdjustingColorsLoading] = useState<boolean>(false);
+  const [adjustColorsMessage, setAdjustColorsMessage] = useState<string | null>(null);
+
+  const handleAdjustColors = async () => {
+    setAdjustingColorsLoading(true);
+    setAdjustColorsMessage(null);
+    try {
+      const response = await fetch('/api/colors/adjust-grey', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setAdjustColorsMessage(`Success: ${data.message} Average grey: ${data.summary.average_grey_percentage.toFixed(2)}%`);
+      } else {
+        setAdjustColorsMessage(`Error: ${data.detail || 'Failed to adjust colors'}`);
+      }
+    } catch (error) {
+      setAdjustColorsMessage(`Network error: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setAdjustingColorsLoading(false);
+    }
+  };
+
   return (
     <div className="max-w-2xl p-8 mx-auto mb-8 border shadow-2xl backdrop-blur-xl bg-white/10 border-white/20 rounded-xl shadow-black/30">
       <h2 className="mb-6 text-2xl font-bold text-white">Scrape a Yupoo Store</h2>
@@ -104,6 +130,31 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
           )}
         </button>
       </form>
+      {/* New button for color adjustment */}
+      <button
+        onClick={handleAdjustColors}
+        disabled={adjustingColorsLoading || scrapingLoading}
+        className="flex items-center justify-center w-full gap-2 py-3 mt-4 font-semibold text-white transition-colors border rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 backdrop-blur-md border-white/20 hover:shadow-lg hover:shadow-purple-500/50 disabled:bg-gray-400"
+      >
+        {adjustingColorsLoading ? (
+          <>
+            <Loader size={20} className="animate-spin" />
+            Adjusting Colors...
+          </>
+        ) : (
+          <>
+            <Palette size={20} />
+            Adjust Grey Percentages
+          </>
+        )}
+      </button>
+
+      {adjustColorsMessage && (
+        <div className={`flex items-center gap-2 p-4 mt-4 text-white transition-opacity border rounded-lg shadow-lg backdrop-blur-md ${adjustColorsMessage.startsWith('Error') ? 'bg-red-500/30 border-red-400/50 shadow-red-500/30' : 'bg-green-500/30 border-green-400/50 shadow-green-500/30'}`}>
+          {adjustColorsMessage.startsWith('Error') ? <AlertTriangle size={20} /> : <CheckCircle size={20} />} {adjustColorsMessage}
+        </div>
+      )}
+
       {scrapingLoading && scrapeLogs.length > 0 && (
         <div className="mt-6 space-y-3">
           {scrapeProgress && scrapeProgress.type === 'progress' && (

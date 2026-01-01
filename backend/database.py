@@ -330,3 +330,155 @@ def clear_database(db_path: str = DB_NAME) -> int:
     init_db(db_path)
     debug_print("Database cleared and recreated successfully")
     return deleted_rows
+
+
+def update_product_colors(product_id: int, new_colors_data: dict, db_path: str = DB_NAME) -> None:
+    """Update the colors_json for a specific product.
+
+    Args:
+        product_id: The ID of the product to update.
+        new_colors_data: A dictionary with the new color names and percentages.
+        db_path: Path to the SQLite database file.
+    """
+    debug_print(f"Updating colors for product ID: {product_id}")
+    colors_json = json.dumps(new_colors_data)
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE products
+            SET colors_json = ?
+            WHERE id = ?;
+            """,
+            (colors_json, product_id),
+        )
+        conn.commit()
+        debug_print(f"Successfully updated colors for product ID: {product_id}")
+    except Exception as e:
+        debug_print(f"ERROR updating colors for product ID {product_id}: {e}")
+        raise
+    finally:
+        conn.close()
+
+
+def adjust_grey_percentages(db_path: str = DB_NAME) -> dict:
+    """
+    Adjusts the 'grey' or 'gray' color percentages across all products in the database.
+
+    This function calculates the average 'grey'/'gray' percentage from all products.
+    Then, for each product, it sets its 'grey'/'gray' percentage to this calculated average
+    and re-normalizes the percentages of all other colors proportionally so that
+    the total sum of color percentages remains 100.
+
+    Args:
+        db_path: Path to the SQLite database file.
+
+    Returns:
+        A dictionary containing statistics about the adjustment, including the average
+        grey percentage and the number of products updated.
+    """
+    debug_print("Starting grey percentage adjustment...")
+    all_products = list_all_products(db_path)
+    debug_print(f"Found {len(all_products)} products in the database.")
+
+    total_grey_percentage = 0.0
+    product_count_with_grey = 0
+    updated_product_count = 0
+
+    # First pass: Calculate average grey percentage
+    for product_id, _, _, _, _, _, colors_data in all_products:
+        grey_key = None
+        if 'grey' in colors_data:
+            grey_key = 'grey'
+        elif 'gray' in colors_data:
+            grey_key = 'gray'
+
+        if grey_key and colors_data[grey_key] is not None:
+            total_grey_percentage += colors_data[grey_key]
+            product_count_with_grey += 1
+
+    average_grey_percentage = 0.0
+    if product_count_with_grey > 0:
+        average_grey_percentage = total_grey_percentage / product_count_with_grey
+        debug_print(f"Calculated average grey percentage: {average_grey_percentage:.2f}% from {product_count_with_grey} products.")
+    else:
+        debug_print("No products with grey/gray color found. No adjustment needed.")
+        return {"average_grey_percentage": 0.0, "products_updated": 0, "message": "No grey/gray color found in any product."}
+
+    # Second pass: Adjust grey percentage and re-normalize other colors
+    for product_id, _, _, _, _, _, colors_data in all_products:
+        original_colors = colors_data.copy()
+        grey_key = None
+        if 'grey' in original_colors:
+            grey_key = 'grey'
+        elif 'gray' in original_colors:
+            grey_key = 'gray'
+
+        if grey_key:
+            old_grey_value = original_colors.get(grey_key, 0.0)
+            
+            if abs(old_grey_value - average_grey_percentage) < 0.01: # Avoid unnecessary updates if very close
+                debug_print(f"Product {product_id}: Grey percentage already close to average ({old_grey_value:.2f}%). Skipping update.")
+                continue
+
+            debug_print(f"Product {product_id}: Adjusting grey from {old_grey_value:.2f}% to {average_grey_percentage:.2f}%")
+
+            # Calculate the new grey percentage based on the user's request
+            adjusted_grey_value = old_grey_value - average_grey_percentage
+            
+            new_colors_data = {}
+            if adjusted_grey_value > 0:
+                new_colors_data[grey_key] = adjusted_grey_value
+                debug_print(f"  Product {product_id}: Adjusted grey from {old_grey_value:.2f}% to {adjusted_grey_value:.2f}% (Avg Grey Subtracted: {average_grey_percentage:.2f}%)")
+            else:
+                debug_print(f"  Product {product_id}: Grey percentage {old_grey_value:.2f}% is <= average ({average_grey_percentage:.2f}%). Removing grey tag.")
+            
+            # Calculate total percentage of other colors before adjustment
+            total_other_colors_original = sum(v for k, v in original_colors.items() if k != grey_key)
+
+            # Determine the target sum for other colors after grey adjustment
+            current_grey_in_new_data = new_colors_data.get(grey_key, 0.0)
+            target_sum_other_colors = 100.0 - current_grey_in_new_data
+            
+            # Ensure target_sum_other_colors is not negative
+            if target_sum_other_colors < 0:
+                target_sum_other_colors = 0
+
+            if total_other_colors_original > 0:
+                # Calculate scaling factor for other colors
+                scaling_factor = target_sum_other_colors / total_other_colors_original
+                
+                # Apply scaling factor to other colors
+                for color, percentage in original_colors.items():
+                    if color != grey_key:
+                        new_colors_data[color] = percentage * scaling_factor
+            else:
+                # If there were no other colors, or they summed to zero,
+                # then all other colors should now be 0 if grey is not 100%
+                # or all other colors should remain 0 if grey is 100%.
+                # No scaling needed as new_colors_data already contains only grey.
+                for color, percentage in original_colors.items():
+                    if color != grey_key:
+                        new_colors_data[color] = 0.0 # Explicitly set others to 0
+
+            # Ensure sum is 100 (due to potential float precision issues)
+            current_sum = sum(new_colors_data.values())
+            if abs(current_sum - 100.0) > 0.01:
+                debug_print(f"  Warning: Sum of percentages for product {product_id} is {current_sum:.2f} after adjustment. Renormalizing slightly.")
+                re_scaling_factor = 100.0 / current_sum
+                for color in new_colors_data:
+                    new_colors_data[color] *= re_scaling_factor
+
+            # Update the database
+            update_product_colors(product_id, new_colors_data, db_path)
+            updated_product_count += 1
+        else:
+            debug_print(f"Product {product_id}: No grey/gray color found. Skipping adjustment.")
+
+    debug_print(f"Finished grey percentage adjustment. Updated {updated_product_count} products.")
+    return {
+        "average_grey_percentage": average_grey_percentage,
+        "products_updated": updated_product_count,
+        "message": f"Grey percentages adjusted for {updated_product_count} products."
+    }
