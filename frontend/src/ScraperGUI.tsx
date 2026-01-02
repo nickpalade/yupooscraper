@@ -61,7 +61,7 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
     setAdjustingColorsLoading(true);
     setAdjustColorsMessage(null);
     try {
-      const response = await fetch('/api/colors/adjust-grey', {
+      const response = await fetch('/api/colors/adjust', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -69,7 +69,7 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
       });
       const data = await response.json();
       if (response.ok) {
-        setAdjustColorsMessage(`Success: ${data.message} Average grey: ${data.summary.average_grey_percentage.toFixed(2)}%`);
+        setAdjustColorsMessage(`Success: ${data.message} ${JSON.stringify(data.summary.average_percentages)}`);
       } else {
         setAdjustColorsMessage(`Error: ${data.detail || 'Failed to adjust colors'}`);
       }
@@ -144,7 +144,7 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
         ) : (
           <>
             <Palette size={20} />
-            Adjust Grey Percentages
+            Adjust Special Color Percentages
           </>
         )}
       </button>
