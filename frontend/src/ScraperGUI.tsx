@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Loader, Download, AlertCircle, CheckCircle, FileText, RotateCw, Image, Target, AlertTriangle, MapPin, Palette } from 'lucide-react';
+import { Loader, Download, AlertCircle, CheckCircle, FileText, RotateCw, Image, Target, AlertTriangle, MapPin, Palette, Trash2 } from 'lucide-react';
 
 interface ScrapeProgress {
     type: 'info' | 'progress' | 'success' | 'error' | 'complete' |
