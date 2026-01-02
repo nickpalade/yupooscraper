@@ -374,25 +374,36 @@ def clear_database_endpoint():
         "deleted_count": deleted
     }
 
-@app.post("/api/colors/adjust-grey", summary="Adjust grey color percentages")
-def adjust_grey_percentages_endpoint():
+# TEMPORARY: Run grey percentage adjustment on startup for testing
+# debug_print("--- TEMPORARY: Running grey percentage adjustment on startup ---")
+# try:
+#     adjustment_result = database.adjust_color_percentages(colors_to_adjust=["grey", "white"])
+#     debug_print(f"--- TEMPORARY: Grey adjustment result: {adjustment_result} ---")
+# except Exception as e:
+#     debug_print(f"--- TEMPORARY: Error during grey adjustment on startup: {e} ---")
+# debug_print("--- TEMPORARY: Finished grey percentage adjustment on startup ---")
+
+@app.post("/api/colors/adjust", summary="Adjust special color percentages (e.g., grey, white)")
+def adjust_special_color_percentages_endpoint():
     """
-    Adjusts the 'grey' or 'gray' color percentages across all products in the database.
-    This process calculates the average grey percentage and then normalizes
-    each product's color data based on this average.
+    Adjusts the percentages of specified "special" colors (e.g., 'grey', 'white')
+    across all products in the database.
+    This process calculates the average percentage for each special color and then
+    normalizes each product's color data based on this average, re-normalizing
+    the percentages of all other colors proportionally.
 
     Returns:
         A dictionary containing statistics about the adjustment.
     """
-    debug_print("=== ADJUST GREY PERCENTAGES REQUEST ===")
+    debug_print("=== ADJUST SPECIAL COLOR PERCENTAGES REQUEST ===")
     try:
-        adjustment_summary = database.adjust_grey_percentages()
-        debug_print(f"Grey percentage adjustment complete: {adjustment_summary}")
+        adjustment_summary = database.adjust_color_percentages(colors_to_adjust=["grey", "white"])
+        debug_print(f"Special color percentage adjustment complete: {adjustment_summary}")
         return {
             "status": "success",
-            "message": "Grey color percentages adjusted successfully.",
+            "message": "Special color percentages adjusted successfully.",
             "summary": adjustment_summary
         }
     except Exception as e:
-        debug_print(f"ERROR adjusting grey percentages: {e}")
-        raise HTTPException(status_code=500, detail=f"An error occurred during grey percentage adjustment: {str(e)}")
+        debug_print(f"ERROR adjusting special color percentages: {e}")
+        raise HTTPException(status_code=500, detail=f"An error occurred during special color percentage adjustment: {str(e)}")
