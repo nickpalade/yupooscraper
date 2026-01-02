@@ -107,6 +107,7 @@ def insert_product(image_url: str, tags: Iterable[str], album_url: str, image_pa
         colors_data: Dictionary with color names and percentages.
         db_path: Path to the SQLite database file.
     """
+    tags_list = list(tags)
     debug_print(f"  tags_list (type={type(tags_list)}): {tags_list}")
     tags_json = json.dumps(tags_list)
     debug_print(f"  colors_data (type={type(colors_data)}): {colors_data}")
