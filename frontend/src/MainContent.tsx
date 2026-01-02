@@ -34,9 +34,6 @@ interface MainContentProps {
   setMobileGridCols: (cols: number) => void;
   onImageClick: (image: string, title: string) => void;
   handleViewAll: () => void;
-  handleClearDatabase: () => void;
-  clearingDatabase: boolean;
-  clearDatabaseMessage: string | null;
   scrapeProgress: any;
   exclusiveTypeSearch: boolean;
   setExclusiveTypeSearch: (exclusive: boolean) => void;
@@ -71,9 +68,6 @@ const MainContent: React.FC<MainContentProps> = ({
   setMobileGridCols,
   onImageClick,
   handleViewAll,
-  handleClearDatabase,
-  clearingDatabase,
-  clearDatabaseMessage,
   scrapeProgress,
   exclusiveTypeSearch,
   setExclusiveTypeSearch,
@@ -155,30 +149,6 @@ const MainContent: React.FC<MainContentProps> = ({
                   <Eye size={20} />
                   {searchLoading ? 'Loading...' : `View All Products (${products.length > 0 ? products.length : '?'})`}
                 </button>
-                <button
-                  onClick={handleClearDatabase}
-                  disabled={clearingDatabase}
-                  className="flex items-center justify-center w-full gap-2 py-3 font-semibold text-white transition-all glass-button"
-                  style={{
-                    backgroundImage: 'linear-gradient(135deg, #dc2626 0%, #ef4444 50%, #f87171 100%)',
-                    color: 'var(--button-text)',
-                    borderColor: 'var(--glass-border)',
-                  }}
-                >
-                  <Trash2 size={20} />
-                  {clearingDatabase ? 'Clearing...' : 'Clear Database'}
-                </button>
-                {clearDatabaseMessage && (
-                  <div className={`p-3 rounded-lg text-sm font-medium glass-container`}
-                    style={{
-                      backgroundColor: clearDatabaseMessage.includes('success') || clearDatabaseMessage.includes('cleared') ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)', // Green-500/30 or Red-500/30
-                      color: 'var(--text-color)',
-                      borderColor: clearDatabaseMessage.includes('success') || clearDatabaseMessage.includes('cleared') ? 'rgba(74, 222, 128, 0.5)' : 'rgba(248, 113, 113, 0.5)', // Green-400/50 or Red-400/50
-                    }}
-                  >
-                    {clearDatabaseMessage}
-                  </div>
-                )}
               </div>
             </div>
           </>

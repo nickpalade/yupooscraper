@@ -37,6 +37,9 @@ interface ScraperGUIProps {
     scrapeLogs: ScrapeProgress[];
     handleScrape: (e: React.FormEvent) => void;
     exponentialSliderToValue: (sliderValue: number) => number;
+    handleClearDatabase: () => void;
+    clearingDatabase: boolean;
+    clearDatabaseMessage: string | null;
 }
 
 const ScraperGUI: React.FC<ScraperGUIProps> = ({
@@ -53,6 +56,9 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
     scrapeLogs,
     handleScrape,
     exponentialSliderToValue,
+    handleClearDatabase,
+    clearingDatabase,
+    clearDatabaseMessage,
 }) => {
   const [adjustingColorsLoading, setAdjustingColorsLoading] = useState<boolean>(false);
   const [adjustColorsMessage, setAdjustColorsMessage] = useState<string | null>(null);
@@ -148,6 +154,31 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
           </>
         )}
       </button>
+
+      {/* Clear Database button */}
+      <button
+        onClick={handleClearDatabase}
+        disabled={clearingDatabase || scrapingLoading || adjustingColorsLoading}
+        className="flex items-center justify-center w-full gap-2 py-3 mt-4 font-semibold text-white transition-colors border rounded-lg bg-gradient-to-r from-red-500 to-rose-500 backdrop-blur-md border-white/20 hover:shadow-lg hover:shadow-red-500/50 disabled:bg-gray-400"
+      >
+        {clearingDatabase ? (
+          <>
+            <Loader size={20} className="animate-spin" />
+            Clearing Database...
+          </>
+        ) : (
+          <>
+            <Trash2 size={20} />
+            Clear Database
+          </>
+        )}
+      </button>
+      {clearDatabaseMessage && (
+        <div className={`flex items-center gap-2 p-4 mt-4 text-white transition-opacity border rounded-lg shadow-lg backdrop-blur-md ${clearDatabaseMessage.includes('Error') ? 'bg-red-500/30 border-red-400/50 shadow-red-500/30' : 'bg-green-500/30 border-green-400/50 shadow-green-500/30'}`}>
+          {clearDatabaseMessage.includes('Error') ? <AlertTriangle size={20} /> : <CheckCircle size={20} />} {clearDatabaseMessage}
+        </div>
+      )}
+
 
       {adjustColorsMessage && (
         <div className={`flex items-center gap-2 p-4 mt-4 text-white transition-opacity border rounded-lg shadow-lg backdrop-blur-md ${adjustColorsMessage.startsWith('Error') ? 'bg-red-500/30 border-red-400/50 shadow-red-500/30' : 'bg-green-500/30 border-green-400/50 shadow-green-500/30'}`}>

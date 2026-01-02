@@ -433,9 +433,6 @@ const App: React.FC = () => {
                       setMobileGridCols={setMobileGridCols}
                       onImageClick={onImageClick}
                       handleViewAll={handleViewAll}
-                      handleClearDatabase={handleClearDatabase}
-                      clearingDatabase={clearingDatabase}
-                      clearDatabaseMessage={clearDatabaseMessage}
                       scrapeProgress={scrapeProgress}
                       exclusiveTypeSearch={exclusiveTypeSearch}
                       setExclusiveTypeSearch={setExclusiveTypeSearch}
@@ -455,6 +452,9 @@ const App: React.FC = () => {
             scrapeLogs={scrapeLogs}
             handleScrape={handleScrape}
             exponentialSliderToValue={exponentialSliderToValue}
+            handleClearDatabase={handleClearDatabase}
+            clearingDatabase={clearingDatabase}
+            clearDatabaseMessage={clearDatabaseMessage}
           />
         )}
         {previewImage && (
