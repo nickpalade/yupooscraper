@@ -362,6 +362,35 @@ def update_product_colors(product_id: int, new_colors_data: dict, db_path: str =
         conn.close()
 
 
+def update_product_tags(product_id: int, new_tags_json: str, db_path: str = DB_NAME) -> None:
+    """Update the tags_json for a specific product.
+
+    Args:
+        product_id: The ID of the product to update.
+        new_tags_json: A JSON string with the new tags.
+        db_path: Path to the SQLite database file.
+    """
+    debug_print(f"Updating tags for product ID: {product_id}")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE products
+            SET tags_json = ?
+            WHERE id = ?;
+            """,
+            (new_tags_json, product_id),
+        )
+        conn.commit()
+        debug_print(f"Successfully updated tags for product ID: {product_id}")
+    except Exception as e:
+        debug_print(f"ERROR updating tags for product ID {product_id}: {e}")
+        raise
+    finally:
+        conn.close()
+
+
 def adjust_grey_percentages(db_path: str = DB_NAME) -> dict:
     """
     Adjusts the 'grey' or 'gray' color percentages across all products in the database.
@@ -407,8 +436,8 @@ def adjust_grey_percentages(db_path: str = DB_NAME) -> dict:
         return {"average_grey_percentage": 0.0, "products_updated": 0, "message": "No grey/gray color found in any product."}
 
     # Second pass: Adjust grey percentage and re-normalize other colors
-    for product_id, _, _, _, _, _, colors_data in all_products:
-        original_colors = colors_data.copy()
+    for product_id, _, _, _, tags_list_original, album_url, colors_data_original in all_products:
+        original_colors = colors_data_original.copy()
         grey_key = None
         if 'grey' in original_colors:
             grey_key = 'grey'
@@ -422,17 +451,37 @@ def adjust_grey_percentages(db_path: str = DB_NAME) -> dict:
                 debug_print(f"Product {product_id}: Grey percentage already close to average ({old_grey_value:.2f}%). Skipping update.")
                 continue
 
-            debug_print(f"Product {product_id}: Adjusting grey from {old_grey_value:.2f}% to {average_grey_percentage:.2f}%")
-
             # Calculate the new grey percentage based on the user's request
             adjusted_grey_value = old_grey_value - average_grey_percentage
             
-            new_colors_data = {}
-            if adjusted_grey_value > 0:
+            new_colors_data = {} # Starts empty
+            tags_modified = False # Flag to track if tags_json needs updating
+            new_tags_json_to_save = json.dumps(tags_list_original) # Start with original tags as a JSON string
+
+            EPSILON = 1e-9 # Define a small epsilon for floating point comparisons
+            if adjusted_grey_value > EPSILON:
                 new_colors_data[grey_key] = adjusted_grey_value
-                debug_print(f"  Product {product_id}: Adjusted grey from {old_grey_value:.2f}% to {adjusted_grey_value:.2f}% (Avg Grey Subtracted: {average_grey_percentage:.2f}%)")
+                debug_print(f"  Product {product_id}: Adjusted grey from {old_grey_value:.2f}% to {adjusted_grey_value:.2f}% (Avg Grey Subtracted: {average_grey_percentage:.2f}%). New value: {adjusted_grey_value:.2f}%")
             else:
-                debug_print(f"  Product {product_id}: Grey percentage {old_grey_value:.2f}% is <= average ({average_grey_percentage:.2f}%). Removing grey tag.")
+                debug_print(f"  Product {product_id}: Grey percentage {old_grey_value:.2f}% is <= average ({average_grey_percentage:.2f}%). Adjusted value ({adjusted_grey_value:.2f}%) is <= EPSILON. Removing grey tag from colors_json AND tags_json.")
+                # The grey_key is implicitly removed from new_colors_data as it's not added.
+
+                # --- NEW LOGIC FOR tags_json ---
+                current_tags_list = tags_list_original
+                tag_to_remove_color_grey = "color_grey"
+                tag_to_remove_color_gray = "color_gray"
+                
+                # Check and remove both variants
+                if tag_to_remove_color_grey in current_tags_list:
+                    current_tags_list.remove(tag_to_remove_color_grey)
+                    tags_modified = True
+                if tag_to_remove_color_gray in current_tags_list:
+                    current_tags_list.remove(tag_to_remove_color_gray)
+                    tags_modified = True
+                
+                if tags_modified:
+                    new_tags_json_to_save = json.dumps(current_tags_list)
+                # --- END NEW LOGIC ---
             
             # Calculate total percentage of other colors before adjustment
             total_other_colors_original = sum(v for k, v in original_colors.items() if k != grey_key)
@@ -472,6 +521,8 @@ def adjust_grey_percentages(db_path: str = DB_NAME) -> dict:
 
             # Update the database
             update_product_colors(product_id, new_colors_data, db_path)
+            if tags_modified:
+                update_product_tags(product_id, new_tags_json_to_save, db_path) # Updates tags_json
             updated_product_count += 1
         else:
             debug_print(f"Product {product_id}: No grey/gray color found. Skipping adjustment.")
