@@ -107,8 +107,9 @@ def insert_product(image_url: str, tags: Iterable[str], album_url: str, image_pa
         colors_data: Dictionary with color names and percentages.
         db_path: Path to the SQLite database file.
     """
-    tags_list = list(tags)
+    debug_print(f"  tags_list (type={type(tags_list)}): {tags_list}")
     tags_json = json.dumps(tags_list)
+    debug_print(f"  colors_data (type={type(colors_data)}): {colors_data}")
     colors_json = json.dumps(colors_data or {})
     debug_print(f"Inserting product: {album_url}")
     debug_print(f"  Image URL: {image_url}")
@@ -257,7 +258,10 @@ def list_all_products(db_path: str = DB_NAME) -> List[Tuple[int, str, str, str, 
     result: List[Tuple[int, str, str, str, List[str], str, dict]] = []
     for row in rows:
         product_id, image_url, image_path, album_title, tags_json, album_url, colors_json = row
+        debug_print(f"  list_all_products: Processing product_id={product_id}")
+        debug_print(f"    tags_json (type={type(tags_json)}): {tags_json[:100]}...") # Print first 100 chars
         tags = json.loads(tags_json)
+        debug_print(f"    colors_json (type={type(colors_json)}): {colors_json[:100]}...") # Print first 100 chars
         colors_data = json.loads(colors_json) if colors_json else {}
         result.append((product_id, image_url, image_path, album_title, tags, album_url, colors_data))
     return result
@@ -520,8 +524,10 @@ def adjust_grey_percentages(db_path: str = DB_NAME) -> dict:
                     new_colors_data[color] *= re_scaling_factor
 
             # Update the database
+            debug_print(f"  Adjusting grey percentages: Calling update_product_colors for product ID: {product_id}. new_colors_data (type={type(new_colors_data)}): {new_colors_data}")
             update_product_colors(product_id, new_colors_data, db_path)
             if tags_modified:
+                debug_print(f"  Adjusting grey percentages: Calling update_product_tags for product ID: {product_id}. new_tags_json_to_save (type={type(new_tags_json_to_save)}): {new_tags_json_to_save}")
                 update_product_tags(product_id, new_tags_json_to_save, db_path) # Updates tags_json
             updated_product_count += 1
         else:
