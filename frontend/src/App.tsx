@@ -114,6 +114,8 @@ const App: React.FC = () => {
 
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewTitle, setPreviewTitle] = useState<string | null>(null);
+  const [previewProductId, setPreviewProductId] = useState<number | undefined>(undefined);
+  const [highlightedProductId, setHighlightedProductId] = useState<number | null>(null);
 
   
   // --- Core Data Loading and State Persistence ---
@@ -367,10 +369,71 @@ const App: React.FC = () => {
     }
   };
 
-  const onImageClick = useCallback((image: string, title: string) => {
+  const onImageClick = useCallback((image: string, title: string, productId?: number) => {
+    setHighlightedProductId(null);
     setPreviewImage(image);
     setPreviewTitle(title);
+    setPreviewProductId(productId);
   }, []);
+
+  const handlePreviewNavigate = useCallback((productId: number) => {
+    setHighlightedProductId(null);
+    const product = products.find(p => p.id === productId);
+    if (product) {
+      const imageSrc = product.image_path ? product.image_path : product.image_url;
+      setPreviewImage(imageSrc);
+      setPreviewTitle(product.album_title);
+      setPreviewProductId(productId);
+    }
+  }, [products]);
+
+  const handleCloseWithHighlight = useCallback((productId: number) => {
+    // Find the product index in the products array
+    const productIndex = products.findIndex(p => p.id === productId);
+    if (productIndex === -1) return;
+    
+    // Calculate which page the product is on
+    const productPage = Math.floor(productIndex / itemsPerPage) + 1;
+    
+    // Check if we need to navigate to a different page
+    if (productPage !== currentPage) {
+      // Change to the correct page first
+      setCurrentPage(productPage);
+      
+      // Wait for the page change to complete, then scroll and highlight
+      setTimeout(() => {
+        const productCard = document.querySelector(`[data-product-id="${productId}"]`);
+        if (productCard) {
+          setHighlightedProductId(productId);
+          productCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          
+          // Remove highlight after 2 seconds
+          setTimeout(() => {
+            setHighlightedProductId(null);
+          }, 2000);
+        }
+      }, 100); // Small delay to ensure DOM has updated
+    } else {
+      // Product is on current page, check if it's in viewport
+      const productCard = document.querySelector(`[data-product-id="${productId}"]`);
+      if (!productCard) return;
+      
+      const rect = productCard.getBoundingClientRect();
+      // Card is off screen if bottom is above viewport OR top is below viewport
+      const isOffScreen = rect.bottom < 0 || rect.top > window.innerHeight;
+      
+      // Only highlight and scroll if off screen
+      if (isOffScreen) {
+        setHighlightedProductId(productId);
+        productCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Remove highlight after 2 seconds
+        setTimeout(() => {
+          setHighlightedProductId(null);
+        }, 2000);
+      }
+    }
+  }, [products, itemsPerPage, currentPage]);
 
   const handleSimilarSearch = (product: Product, sameBrand: boolean) => {
     const newSelected = new Set<string>();
@@ -437,6 +500,7 @@ const App: React.FC = () => {
                       exclusiveTypeSearch={exclusiveTypeSearch}
                       setExclusiveTypeSearch={setExclusiveTypeSearch}
                       performSearch={performSearch}
+                      highlightedProductId={highlightedProductId}
                     />
                   ) : (
                     <ScraperGUI            scrapeUrl={scrapeUrl}
@@ -464,7 +528,13 @@ const App: React.FC = () => {
             onClose={() => {
               setPreviewImage(null);
               setPreviewTitle(null);
+              setPreviewProductId(undefined);
             }}
+            products={products}
+            currentProductId={previewProductId}
+            onNavigate={handlePreviewNavigate}
+            onCloseWithHighlight={handleCloseWithHighlight}
+            onSimilarSearch={handleSimilarSearch}
           />
         )}
       </div>

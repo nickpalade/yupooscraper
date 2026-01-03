@@ -98,6 +98,15 @@ body {
 }
 
 /* Keyframe animations for glow effects - static glow (no repeating animation) */
+@keyframes highlightFadeOut {
+  0% {
+    box-shadow: 0 0 30px rgba(239, 68, 68, 0.8), 0 0 50px rgba(239, 68, 68, 0.5), inset 0 0 20px rgba(239, 68, 68, 0.2);
+  }
+  100% {
+    box-shadow: 0 0 5px rgba(239, 68, 68, 0.2), 0 0 10px rgba(239, 68, 68, 0.1), inset 0 0 5px rgba(239, 68, 68, 0.05);
+  }
+}
+
 @keyframes glowFade {
   from {
     box-shadow: 0 0 15px rgba(79, 70, 229, 0.3);

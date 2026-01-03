@@ -32,12 +32,13 @@ interface MainContentProps {
   setItemsPerPage: (items: number) => void;
   mobileGridCols: number;
   setMobileGridCols: (cols: number) => void;
-  onImageClick: (image: string, title: string) => void;
+  onImageClick: (image: string, title: string, productId?: number) => void;
   handleViewAll: () => void;
   scrapeProgress: any;
   exclusiveTypeSearch: boolean;
   setExclusiveTypeSearch: (exclusive: boolean) => void;
   performSearch: (tagsToSearch: Set<string>) => Promise<void>;
+  highlightedProductId?: number | null;
 }
 
 const MainContent: React.FC<MainContentProps> = ({
@@ -72,24 +73,121 @@ const MainContent: React.FC<MainContentProps> = ({
   exclusiveTypeSearch,
   setExclusiveTypeSearch,
   performSearch,
+  highlightedProductId,
 }) => {
   const resultsRef = useRef<HTMLDivElement>(null);
+  const [isScrolling, setIsScrolling] = React.useState(false);
+  const [animatedItems, setAnimatedItems] = React.useState<Set<number>>(new Set());
+  const [instantItems, setInstantItems] = React.useState<Set<number>>(new Set());
+  const scrollTimeoutRef = useRef<number | null>(null);
 
   const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-
     if (resultsRef.current) {
       const { top } = resultsRef.current.getBoundingClientRect();
-      const navbarHeight = 112; // Corresponds to md:pt-28 which is 7rem or 112px
+      const navbarHeight = 112;
       const scrollThreshold = 200;
 
-      // Only scroll if the element is not already in view or is far away
-      if (top < 0 || top > window.innerHeight - scrollThreshold) {
+      // Check if we need to scroll
+      const needsScrolling = top < 0 || top > window.innerHeight - scrollThreshold;
+
+      if (needsScrolling) {
+        // Set scrolling state
+        setIsScrolling(true);
+        
         const y = resultsRef.current.getBoundingClientRect().top + window.scrollY - navbarHeight;
         window.scrollTo({ top: y, behavior: 'smooth' });
+
+        // Clear existing timeout
+        if (scrollTimeoutRef.current) {
+          clearTimeout(scrollTimeoutRef.current);
+        }
+
+        // Wait for scroll to finish before changing page
+        scrollTimeoutRef.current = window.setTimeout(() => {
+          setIsScrolling(false);
+          setCurrentPage(page);
+          setAnimatedItems(new Set());
+          setInstantItems(new Set());
+        }, 800); // Smooth scroll typically takes 500-800ms
+      } else {
+        // No scrolling needed, change page immediately
+        setCurrentPage(page);
+        setAnimatedItems(new Set());
+        setInstantItems(new Set());
       }
+    } else {
+      // No resultsRef, just change page
+      setCurrentPage(page);
+      setAnimatedItems(new Set());
+      setInstantItems(new Set());
     }
   };
+
+  // Calculate which items are visible and should be animated
+  React.useEffect(() => {
+    if (products.length === 0) return;
+
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentItems = products.slice(indexOfFirstItem, indexOfLastItem);
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const viewportHeight = window.innerHeight;
+        const bufferSpace = viewportHeight * 2; // Two full screens as buffer
+
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const index = parseInt(entry.target.getAttribute('data-index') || '0', 10);
+            const rect = entry.target.getBoundingClientRect();
+            
+            // Check if item is within viewport + buffer (should animate)
+            if (rect.top < viewportHeight + bufferSpace) {
+              setAnimatedItems((prev) => {
+                const newSet = new Set(prev);
+                newSet.add(index);
+                return newSet;
+              });
+              
+              // Check if this is the last visible item in the extended viewport
+              if (rect.bottom > viewportHeight + bufferSpace) {
+                // Load all remaining items instantly (no animation)
+                setInstantItems((prev) => {
+                  const newSet = new Set(prev);
+                  for (let i = index + 1; i < currentItems.length; i++) {
+                    newSet.add(i);
+                  }
+                  return newSet;
+                });
+              }
+            }
+          }
+        });
+      },
+      {
+        root: null,
+        rootMargin: '200%', // Two full screens buffer
+        threshold: 0.01,
+      }
+    );
+
+    // Start observing all product cards
+    const cards = document.querySelectorAll('[data-product-card]');
+    cards.forEach((card) => observer.observe(card));
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [currentPage, products, itemsPerPage]);
+
+  // Cleanup scroll timeout on unmount
+  React.useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <>
@@ -212,6 +310,10 @@ const MainContent: React.FC<MainContentProps> = ({
                   handleSimilarSearch={handleSimilarSearch}
                   mobileGridCols={mobileGridCols}
                   index={index}
+                  shouldAnimate={animatedItems.has(index)}
+                  shouldShowInstantly={instantItems.has(index)}
+                  isScrolling={isScrolling}
+                  isHighlighted={highlightedProductId === product.id}
                 />
               ))}
             </div>

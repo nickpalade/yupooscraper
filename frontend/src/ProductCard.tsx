@@ -7,10 +7,14 @@ import { Product, TagCategory, categorizeAndFormatTags } from './types';
 
 interface ProductCardProps {
     product: Product;
-    onImageClick: (image: string, title:string) => void;
+    onImageClick: (image: string, title: string, productId?: number) => void;
     handleSimilarSearch: (product: Product, sameBrand: boolean) => void;
     mobileGridCols: number;
     index: number;
+    shouldAnimate: boolean;
+    shouldShowInstantly: boolean;
+    isScrolling: boolean;
+    isHighlighted?: boolean;
 }
 
 function buildAllChinaBuyUrl(productUrl: string): string {
@@ -35,16 +39,47 @@ const isMobile = (): boolean => {
 };
 
 
-const ProductCard: React.FC<ProductCardProps> = ({ product, onImageClick, handleSimilarSearch, mobileGridCols, index }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ product, onImageClick, handleSimilarSearch, mobileGridCols, index, shouldAnimate, shouldShowInstantly, isScrolling, isHighlighted }) => {
     const [isFetchingLink, setIsFetchingLink] = useState(false);
+    const [pendingSimilarSearch, setPendingSimilarSearch] = useState<boolean | null>(null);
+    const similarSearchTimeoutRef = React.useRef<number | null>(null);
     const { settings } = useSettings();
     const tagSettings = settings.tags;
 
 
     const handleImageClick = () => {
         const imageSrc = product.image_path ? product.image_path : product.image_url;
-        onImageClick(imageSrc, product.album_title);
+        onImageClick(imageSrc, product.album_title, product.id);
     };
+
+    const handleSimilarSearchClick = (sameBrand: boolean) => {
+        // If already pending, execute the search
+        if (pendingSimilarSearch === sameBrand) {
+            handleSimilarSearch(product, sameBrand);
+            setPendingSimilarSearch(null);
+            if (similarSearchTimeoutRef.current) {
+                clearTimeout(similarSearchTimeoutRef.current);
+            }
+        } else {
+            // First click - set pending state
+            setPendingSimilarSearch(sameBrand);
+            // Reset pending state after 1.5 seconds if not clicked again
+            if (similarSearchTimeoutRef.current) {
+                clearTimeout(similarSearchTimeoutRef.current);
+            }
+            similarSearchTimeoutRef.current = window.setTimeout(() => {
+                setPendingSimilarSearch(null);
+            }, 1500);
+        }
+    };
+
+    React.useEffect(() => {
+        return () => {
+            if (similarSearchTimeoutRef.current) {
+                clearTimeout(similarSearchTimeoutRef.current);
+            }
+        };
+    }, []);
 
     const handleAllChinaBuyClick = async () => {
         setIsFetchingLink(true);
@@ -95,14 +130,18 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onImageClick, handle
 
     return (
         <div
-            className="flex flex-col overflow-hidden transition-shadow glass-container animate-fadeInUp"
+            data-product-card
+            data-index={index}
+            data-product-id={product.id}
+            className={`flex flex-col overflow-hidden transition-all rounded-xl border ${shouldAnimate && !isScrolling && !shouldShowInstantly ? 'animate-fadeInUp' : ''} ${isHighlighted ? 'ring-8 ring-red-500' : ''}`}
             style={{
                 backgroundColor: 'var(--card-bg)',
                 borderColor: 'var(--border-color)',
-                boxShadow: 'var(--card-shadow)',
-                animationDelay: `${index * 50}ms`,
+                boxShadow: isHighlighted ? '0 0 20px rgba(239, 68, 68, 0.8), 0 0 35px rgba(239, 68, 68, 0.5), inset 0 0 15px rgba(239, 68, 68, 0.2)' : 'var(--card-shadow)',
+                animation: isHighlighted && !(shouldAnimate && !isScrolling && !shouldShowInstantly) ? 'highlightFadeOut 2s ease-out forwards' : undefined,
+                animationDelay: shouldAnimate && !isScrolling && !shouldShowInstantly ? `${index * 50}ms` : '0ms',
                 animationFillMode: 'forwards',
-                opacity: 0, // Start with opacity 0, animation will take it to 1
+                opacity: shouldShowInstantly || isScrolling ? 1 : (shouldAnimate ? 0 : 1),
             }}
         >
             <div
@@ -188,7 +227,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onImageClick, handle
                                                     return (
                                                         <span
                                                             key={idx}
-                                                            className={`inline-block glass-button glow-${category} ${tagSizeClass} rounded whitespace-nowrap`}
+                                                            className={`inline-block rounded border ${tagSizeClass} whitespace-nowrap`}
                                                             style={{
                                                                 backgroundColor: `var(--tag-${category}-bg)`,
                                                                 color: `var(--tag-${category}-text)`,
@@ -209,55 +248,6 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onImageClick, handle
                         );
                     })()}
                 </div>
-                <div className="grid grid-cols-2 gap-2 mt-auto">
-    <button
-        onClick={() => handleSimilarSearch(product, true)}
-        className="w-full px-3 py-2 text-xs font-semibold text-center glass-button"
-        style={{
-            backgroundColor: 'var(--primary-color)',
-            color: 'var(--button-text)',
-            borderColor: 'var(--glass-border)',
-        }}
-    >
-        Find Similar
-    </button>
-    <button
-        onClick={() => handleSimilarSearch(product, false)}
-        className="w-full px-3 py-2 text-xs font-semibold text-center glass-button"
-        style={{
-            backgroundColor: 'var(--primary-color)',
-            color: 'var(--button-text)',
-            borderColor: 'var(--glass-border)',
-        }}
-    >
-        Find Similar (Any Brand)
-    </button>
-    <a
-        href={product.album_url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="w-full px-3 py-2 text-xs font-semibold text-center glass-button"
-        style={{
-            backgroundColor: 'var(--primary-color)',
-            color: 'var(--button-text)',
-            borderColor: 'var(--glass-border)',
-        }}
-    >
-        Yupoo
-    </a>
-    <button
-        onClick={handleAllChinaBuyClick}
-        disabled={isFetchingLink}
-        className="w-full px-3 py-2 text-xs font-semibold text-center glass-button disabled:opacity-50 disabled:cursor-not-allowed"
-        style={{
-            backgroundColor: 'var(--allchinabuy-color)',
-            color: 'var(--button-text)',
-            borderColor: 'var(--glass-border)',
-        }}
-    >
-        {isFetchingLink ? 'Fetching...' : 'AllChinaBuy'}
-    </button>
-</div>
             </div>
         </div>
     );
