@@ -5,6 +5,8 @@ import NavigationBar from './NavigationBar';
 import { useSettings, SettingsModal } from './SettingsContext';
 import ScraperGUI from './ScraperGUI';
 import MainContent from './MainContent';
+import LoginModal from './LoginModal';
+import MyLists from './MyLists';
 import { Product, TagCategory } from './types';
 
 
@@ -55,8 +57,13 @@ const valueToExponentialSlider = (value: number): number => {
 
 const App: React.FC = () => {
   const { settings } = useSettings();
-  const [currentTab, setCurrentTab] = useState<'home' | 'scraper'>('home');
+  const [currentTab, setCurrentTab] = useState<'home' | 'scraper' | 'lists'>('home');
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [username, setUsername] = useState<string>('');
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [colorSearchQuery, setColorSearchQuery] = useState('');
   const [typeSearchQuery, setTypeSearchQuery] = useState('');
   const [brandSearchQuery, setBrandSearchQuery] = useState('');
@@ -119,6 +126,71 @@ const App: React.FC = () => {
 
   
   // --- Core Data Loading and State Persistence ---
+
+  // Check for existing auth token on mount
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    const savedUsername = localStorage.getItem('username');
+    const savedIsAdmin = localStorage.getItem('is_admin') === 'true';
+    
+    if (token && savedUsername) {
+      verifyToken(token, savedUsername, savedIsAdmin);
+    }
+  }, []);
+
+  const verifyToken = async (token: string, savedUsername: string, savedIsAdmin: boolean) => {
+    try {
+      const response = await axios.get('/api/auth/verify', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.status === 200) {
+        setAuthToken(token);
+        setIsAuthenticated(true);
+        setUsername(response.data.username);
+        setIsAdmin(response.data.is_admin);
+      } else {
+        // Token is invalid, remove it
+        handleLogout();
+      }
+    } catch (error) {
+      // Token verification failed, remove it
+      handleLogout();
+    }
+  };
+
+  const handleLoginSuccess = (token: string, user: string, admin: boolean) => {
+    setAuthToken(token);
+    setIsAuthenticated(true);
+    setUsername(user);
+    setIsAdmin(admin);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('username');
+    localStorage.removeItem('is_admin');
+    setAuthToken(null);
+    setIsAuthenticated(false);
+    setUsername('');
+    setIsAdmin(false);
+    setCurrentTab('home');
+  };
+
+  const handleLoginClick = () => {
+    setShowLoginModal(true);
+  };
+
+  // Protect scraper tab - only admins can access
+  useEffect(() => {
+    if (currentTab === 'scraper' && !isAdmin) {
+      setCurrentTab('home');
+      if (!isAuthenticated) {
+        setShowLoginModal(true);
+      }
+    }
+  }, [currentTab, isAdmin, isAuthenticated]);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -184,6 +256,13 @@ const App: React.FC = () => {
 
   const handleScrape = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!isAuthenticated || !authToken) {
+      setScrapeError('Authentication required');
+      setShowLoginModal(true);
+      return;
+    }
+
     setScrapeError(null);
     setScrapeSuccess(null);
     setScrapingLoading(true);
@@ -202,6 +281,7 @@ const App: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
         },
         body: JSON.stringify({
           base_url: trimmedUrl,
@@ -348,6 +428,12 @@ const App: React.FC = () => {
   };
 
   const handleClearDatabase = async () => {
+    if (!isAuthenticated || !authToken) {
+      setClearDatabaseMessage('✗ Error: Authentication required');
+      setShowLoginModal(true);
+      return;
+    }
+
     if (!window.confirm('⚠️ WARNING: This will delete ALL products from the database. Are you sure?')) {
       return;
     }
@@ -356,14 +442,24 @@ const App: React.FC = () => {
     setClearDatabaseMessage(null);
 
     try {
-      const response = await axios.delete(`/api/database/clear`);
+      const response = await axios.delete(`/api/database/clear`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
       setClearDatabaseMessage(`✓ ${response.data.message}`);
       setProducts([]);
       setSelectedTags(new Set());
       
       await fetchTags();
     } catch (err: any) {
-      setClearDatabaseMessage(`✗ Error: ${err?.response?.data?.message || err?.message || 'Failed to clear database'}`);
+      if (err?.response?.status === 401) {
+        setClearDatabaseMessage('✗ Error: Authentication expired. Please login again.');
+        handleLogout();
+        setShowLoginModal(true);
+      } else {
+        setClearDatabaseMessage(`✗ Error: ${err?.response?.data?.message || err?.message || 'Failed to clear database'}`);
+      }
     } finally {
       setClearingDatabase(false);
     }
@@ -464,6 +560,11 @@ const App: React.FC = () => {
         currentTab={currentTab} 
         setCurrentTab={setCurrentTab}
         onSettingsClick={() => setShowSettingsModal(true)}
+        isAuthenticated={isAuthenticated}
+        username={username}
+        isAdmin={isAdmin}
+        onLoginClick={handleLoginClick}
+        onLogoutClick={handleLogout}
       />
       <div className="container px-0 py-8 pt-40 mx-auto md:pt-28">
         {currentTab === 'home' ? (
@@ -501,25 +602,37 @@ const App: React.FC = () => {
                       setExclusiveTypeSearch={setExclusiveTypeSearch}
                       performSearch={performSearch}
                       highlightedProductId={highlightedProductId}
+                      isAuthenticated={isAuthenticated}
+                      authToken={authToken}
+                      onLoginRequired={() => setShowLoginModal(true)}
+                    />
+                  ) : currentTab === 'lists' ? (
+                    <MyLists
+                      authToken={authToken}
+                      isAuthenticated={isAuthenticated}
+                      onLoginRequired={() => setShowLoginModal(true)}
+                      onImageClick={onImageClick}
                     />
                   ) : (
-                    <ScraperGUI            scrapeUrl={scrapeUrl}
-            setScrapeUrl={setScrapeUrl}
-            maxAlbums={maxAlbums}
-            setMaxAlbums={setMaxAlbums}
-            sliderValue={sliderValue}
-            setSliderValue={setSliderValue}
-            scrapingLoading={scrapingLoading}
-            scrapeError={scrapeError}
-            scrapeSuccess={scrapeSuccess}
-            scrapeProgress={scrapeProgress}
-            scrapeLogs={scrapeLogs}
-            handleScrape={handleScrape}
-            exponentialSliderToValue={exponentialSliderToValue}
-            handleClearDatabase={handleClearDatabase}
-            clearingDatabase={clearingDatabase}
-            clearDatabaseMessage={clearDatabaseMessage}
-          />
+                    <ScraperGUI 
+                      scrapeUrl={scrapeUrl}
+                      setScrapeUrl={setScrapeUrl}
+                      maxAlbums={maxAlbums}
+                      setMaxAlbums={setMaxAlbums}
+                      sliderValue={sliderValue}
+                      setSliderValue={setSliderValue}
+                      scrapingLoading={scrapingLoading}
+                      scrapeError={scrapeError}
+                      scrapeSuccess={scrapeSuccess}
+                      scrapeProgress={scrapeProgress}
+                      scrapeLogs={scrapeLogs}
+                      handleScrape={handleScrape}
+                      exponentialSliderToValue={exponentialSliderToValue}
+                      handleClearDatabase={handleClearDatabase}
+                      clearingDatabase={clearingDatabase}
+                      clearDatabaseMessage={clearDatabaseMessage}
+                      authToken={authToken}
+                    />
         )}
         {previewImage && (
           <ImagePreview 
@@ -535,12 +648,20 @@ const App: React.FC = () => {
             onNavigate={handlePreviewNavigate}
             onCloseWithHighlight={handleCloseWithHighlight}
             onSimilarSearch={handleSimilarSearch}
+            isAuthenticated={isAuthenticated}
+            authToken={authToken}
+            onLoginRequired={() => setShowLoginModal(true)}
           />
         )}
       </div>
       <SettingsModal 
         isOpen={showSettingsModal} 
         onClose={() => setShowSettingsModal(false)}
+      />
+      <LoginModal
+        show={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        onLoginSuccess={handleLoginSuccess}
       />
     </div>
   );

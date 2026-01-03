@@ -9,3 +9,6 @@ ultralytics
 torch
 transformers
 pillow
+python-jose[cryptography]
+bcrypt
+python-multipart

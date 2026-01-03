@@ -4,6 +4,7 @@ import { Search } from 'lucide-react';
 import { useSettings } from './SettingsContext';
 import type { AppSettings } from './SettingsContext';
 import { Product, TagCategory, categorizeAndFormatTags } from './types';
+import SaveButton from './SaveButton';
 
 interface ProductCardProps {
     product: Product;
@@ -15,6 +16,11 @@ interface ProductCardProps {
     shouldShowInstantly: boolean;
     isScrolling: boolean;
     isHighlighted?: boolean;
+    highlighted?: boolean;
+    isAuthenticated?: boolean;
+    authToken?: string | null;
+    onLoginRequired?: () => void;
+    showSaveButton?: boolean;
 }
 
 function buildAllChinaBuyUrl(productUrl: string): string {
@@ -39,7 +45,22 @@ const isMobile = (): boolean => {
 };
 
 
-const ProductCard: React.FC<ProductCardProps> = ({ product, onImageClick, handleSimilarSearch, mobileGridCols, index, shouldAnimate, shouldShowInstantly, isScrolling, isHighlighted }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ 
+    product, 
+    onImageClick, 
+    handleSimilarSearch, 
+    mobileGridCols, 
+    index, 
+    shouldAnimate, 
+    shouldShowInstantly, 
+    isScrolling, 
+    isHighlighted,
+    highlighted,
+    isAuthenticated = false,
+    authToken = null,
+    onLoginRequired = () => {},
+    showSaveButton = true
+}) => {
     const [isFetchingLink, setIsFetchingLink] = useState(false);
     const [pendingSimilarSearch, setPendingSimilarSearch] = useState<boolean | null>(null);
     const similarSearchTimeoutRef = React.useRef<number | null>(null);
@@ -145,22 +166,33 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onImageClick, handle
             }}
         >
             <div
-                className="relative w-full overflow-hidden cursor-pointer aspect-square group"
-                onClick={handleImageClick}
+                className="relative w-full overflow-hidden aspect-square group"
                 style={{ backgroundColor: 'var(--card-bg)' }}
             >
+                {showSaveButton && (
+                    <div className="absolute z-20 transition-opacity duration-200 opacity-0 top-2 right-2 group-hover:opacity-100" onMouseLeave={() => window.dispatchEvent(new Event('saveButtonHoverEnd'))}>
+                        <SaveButton
+                            productId={product.id}
+                            isAuthenticated={isAuthenticated}
+                            authToken={authToken}
+                            onLoginRequired={onLoginRequired}
+                            compact={mobileGridCols >= 3}
+                            onHoverEnd={() => {}}
+                        />
+                    </div>
+                )}
                 <img
                     src={product.image_path ? product.image_path : product.image_url}
                     alt={product.album_title || "Product cover"}
-                    className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-110"
+                    className="object-cover w-full h-full transition-transform duration-300 cursor-pointer group-hover:scale-110"
+                    onClick={handleImageClick}
                     onError={(e) => {
                         e.currentTarget.src = 'https://via.placeholder.com/400?text=Image+Not+Found';
                     }}
                     loading="lazy"
                 />
                 <div 
-                    className="absolute inset-0 flex items-center justify-center transition-opacity duration-300 group-hover:bg-opacity-30"
-                    style={{ backgroundColor: 'rgba(0, 0, 0, 0)' }}
+                    className="absolute inset-0 flex items-center justify-center transition-opacity duration-300 pointer-events-none group-hover:bg-black/30"
                 >
                     <Search size={40} className="transition-opacity duration-300 opacity-0 group-hover:opacity-100" style={{ color: 'var(--button-text)' }} />
                 </div>

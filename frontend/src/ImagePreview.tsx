@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import axios from 'axios';
 import { Product } from './types';
+import SaveButton from './SaveButton';
 
 interface ImagePreviewProps {
   image: string;
@@ -12,9 +13,24 @@ interface ImagePreviewProps {
   onNavigate?: (productId: number) => void;
   onCloseWithHighlight?: (productId: number) => void;
   onSimilarSearch?: (product: Product, sameBrand: boolean) => void;
+  isAuthenticated?: boolean;
+  authToken?: string | null;
+  onLoginRequired?: () => void;
 }
 
-const ImagePreview: React.FC<ImagePreviewProps> = ({ image, title, onClose, products, currentProductId, onNavigate, onCloseWithHighlight, onSimilarSearch }) => {
+const ImagePreview: React.FC<ImagePreviewProps> = ({ 
+  image, 
+  title, 
+  onClose, 
+  products, 
+  currentProductId, 
+  onNavigate, 
+  onCloseWithHighlight, 
+  onSimilarSearch,
+  isAuthenticated = false,
+  authToken = null,
+  onLoginRequired = () => {}
+}) => {
   const [offsetY, setOffsetY] = useState(0);
   const [offsetX, setOffsetX] = useState(0);
   const [scale, setScale] = useState(0.95);
@@ -404,6 +420,19 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({ image, title, onClose, prod
           >
             ✕
           </button>
+
+          {/* Save Button - underneath close button */}
+          {currentProductId && (
+            <div className="absolute z-10 top-20 right-4" style={{ pointerEvents: 'auto', zIndex: 20 }}>
+              <SaveButton
+                productId={currentProductId}
+                isAuthenticated={isAuthenticated}
+                authToken={authToken}
+                onLoginRequired={onLoginRequired}
+                compact={false}
+              />
+            </div>
+          )}
           
           {/* Left Navigation Arrow */}
           {canGoPrev && (

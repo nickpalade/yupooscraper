@@ -9,7 +9,7 @@ origin by default, making it straightforward to consume the API from
 a frontend running on a different port.
 """
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -27,6 +27,7 @@ from . import database
 from . import scraper
 from . import vision
 from . import translator
+from . import auth
 
 
 def debug_print(message: str):
@@ -82,6 +83,45 @@ class ProductResponse(BaseModel):
     colors: dict = {}  # Color percentages for sorting
 
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    email: Optional[str] = None
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    username: str
+    is_admin: bool
+
+
+class UserResponse(BaseModel):
+    user_id: int
+    username: str
+    email: Optional[str]
+    is_admin: bool
+
+
+class CreateListRequest(BaseModel):
+    list_name: str
+
+
+class SaveProductRequest(BaseModel):
+    list_id: int
+    product_id: int
+    notes: Optional[str] = None
+
+
+class UpdateNotesRequest(BaseModel):
+    notes: str
+
+
 def save_image_locally(image_url: str) -> Optional[str]:
     """Download and save an image locally.
     
@@ -112,8 +152,326 @@ def save_image_locally(image_url: str) -> Optional[str]:
         return None
 
 
+# ========== Authentication Endpoints ==========
+
+@app.post("/api/auth/register", response_model=UserResponse, summary="Register new user")
+def register(payload: RegisterRequest):
+    """Register a new user account.
+    
+    Args:
+        payload: JSON body containing username, password, and optional email
+        
+    Returns:
+        The created user's information
+        
+    Raises:
+        HTTPException: If username/email already exists
+    """
+    debug_print(f"Registration attempt for user: {payload.username}")
+    
+    # Check if username already exists
+    existing_user = database.get_user_by_username(payload.username)
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="Username already taken"
+        )
+    
+    # Check if email already exists (if provided)
+    if payload.email:
+        existing_email = database.get_user_by_email(payload.email)
+        if existing_email:
+            raise HTTPException(
+                status_code=400,
+                detail="Email already registered"
+            )
+    
+    # Hash password and create user
+    hashed_password = auth.get_password_hash(payload.password)
+    user_id = database.create_user(
+        username=payload.username,
+        hashed_password=hashed_password,
+        email=payload.email,
+        is_admin=False
+    )
+    
+    debug_print(f"User registered successfully: {payload.username}")
+    
+    return UserResponse(
+        user_id=user_id,
+        username=payload.username,
+        email=payload.email,
+        is_admin=False
+    )
+
+
+@app.post("/api/auth/login", response_model=LoginResponse, summary="User login")
+def login(payload: LoginRequest):
+    """Authenticate a user and return a JWT token.
+    
+    Args:
+        payload: JSON body containing username and password
+        
+    Returns:
+        An access token for authenticated requests
+        
+    Raises:
+        HTTPException: If credentials are invalid
+    """
+    debug_print(f"Login attempt for user: {payload.username}")
+    
+    # Get user from database
+    user = database.get_user_by_username(payload.username)
+    if user is None:
+        debug_print(f"Login failed: User not found")
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password"
+        )
+    
+    user_id, username, email, hashed_password, is_admin = user
+    
+    # Verify password
+    if not auth.verify_password(payload.password, hashed_password):
+        debug_print(f"Login failed: Invalid password")
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password"
+        )
+    
+    # Create access token
+    access_token = auth.create_access_token(data={"sub": username})
+    debug_print(f"Login successful for user: {username} (admin: {is_admin})")
+    
+    return LoginResponse(
+        access_token=access_token,
+        username=username,
+        is_admin=bool(is_admin)
+    )
+
+
+@app.get("/api/auth/verify", response_model=UserResponse, summary="Verify token")
+def verify_token(current_user: dict = Depends(auth.get_current_user)):
+    """Verify that the provided JWT token is valid.
+    
+    This endpoint can be used to check if a user is authenticated
+    and to get their information.
+    
+    Args:
+        current_user: The authenticated user (injected by dependency)
+        
+    Returns:
+        The authenticated user's information
+    """
+    return UserResponse(
+        user_id=current_user["user_id"],
+        username=current_user["username"],
+        email=current_user.get("email"),
+        is_admin=current_user["is_admin"]
+    )
+
+
+# ========== User List Management Endpoints ==========
+
+@app.post("/api/user/lists", summary="Create a new list")
+def create_list(payload: CreateListRequest, current_user: dict = Depends(auth.get_current_user)):
+    """Create a new product list for the authenticated user.
+    
+    Args:
+        payload: JSON body containing list_name
+        current_user: The authenticated user
+        
+    Returns:
+        The created list information
+    """
+    try:
+        list_id = database.create_user_list(current_user["user_id"], payload.list_name)
+        return {"list_id": list_id, "list_name": payload.list_name}
+    except Exception as e:
+        if "UNIQUE constraint" in str(e):
+            raise HTTPException(status_code=400, detail="List name already exists")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/user/lists", summary="Get user's lists")
+def get_lists(current_user: dict = Depends(auth.get_current_user)):
+    """Get all lists for the authenticated user.
+    
+    Args:
+        current_user: The authenticated user
+        
+    Returns:
+        List of user's lists
+    """
+    lists = database.get_user_lists(current_user["user_id"])
+    return {"lists": [{"list_id": lid, "list_name": name} for lid, name in lists]}
+
+
+@app.delete("/api/user/lists/{list_id}", summary="Delete a list")
+def delete_list(list_id: int, current_user: dict = Depends(auth.get_current_user)):
+    """Delete a list.
+    
+    Args:
+        list_id: The list ID to delete
+        current_user: The authenticated user
+        
+    Returns:
+        Success message
+    """
+    deleted = database.delete_user_list(list_id, current_user["user_id"])
+    if not deleted:
+        raise HTTPException(status_code=404, detail="List not found")
+    return {"message": "List deleted successfully"}
+
+
+@app.put("/api/user/lists/{list_id}", summary="Rename a list")
+def rename_list(list_id: int, payload: CreateListRequest, current_user: dict = Depends(auth.get_current_user)):
+    """Rename a list.
+    
+    Args:
+        list_id: The list ID to rename
+        payload: JSON body containing new list_name
+        current_user: The authenticated user
+        
+    Returns:
+        Success message
+    """
+    updated = database.rename_user_list(list_id, current_user["user_id"], payload.list_name)
+    if not updated:
+        raise HTTPException(status_code=404, detail="List not found")
+    return {"message": "List renamed successfully"}
+
+
+# ========== Saved Products Endpoints ==========
+
+@app.post("/api/user/saved-products", summary="Save a product to a list")
+def save_product(payload: SaveProductRequest, current_user: dict = Depends(auth.get_current_user)):
+    """Save a product to a list.
+    
+    Args:
+        payload: JSON body containing list_id, product_id, and optional notes
+        current_user: The authenticated user
+        
+    Returns:
+        The saved product information
+    """
+    saved_id = database.save_product_to_list(
+        current_user["user_id"],
+        payload.list_id,
+        payload.product_id,
+        payload.notes
+    )
+    return {"saved_product_id": saved_id, "message": "Product saved successfully"}
+
+
+@app.get("/api/user/lists/{list_id}/products", summary="Get products in a list")
+def get_list_products(list_id: int, current_user: dict = Depends(auth.get_current_user)):
+    """Get all products in a list.
+    
+    Args:
+        list_id: The list ID
+        current_user: The authenticated user
+        
+    Returns:
+        List of saved products with full product details
+    """
+    saved_products = database.get_saved_products_in_list(list_id, current_user["user_id"])
+    
+    # Get full product details for each saved product
+    result = []
+    for saved_id, product_id, notes, saved_at in saved_products:
+        # Get product details from products table
+        conn = database.sqlite3.connect(database.DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, image_url, image_path, album_title, tags_json, album_url, colors_json FROM products WHERE id = ?;",
+            (product_id,)
+        )
+        product_row = cursor.fetchone()
+        conn.close()
+        
+        if product_row:
+            pid, image_url, image_path, album_title, tags_json, album_url, colors_json = product_row
+            tags = json.loads(tags_json)
+            colors = json.loads(colors_json) if colors_json else {}
+            
+            result.append({
+                "saved_product_id": saved_id,
+                "product": {
+                    "id": pid,
+                    "image_url": image_url,
+                    "image_path": image_path,
+                    "album_title": album_title,
+                    "translated_title": translator.translate_name(album_title),
+                    "tags": tags,
+                    "album_url": album_url,
+                    "colors": colors
+                },
+                "notes": notes,
+                "saved_at": saved_at
+            })
+    
+    return {"products": result}
+
+
+@app.put("/api/user/saved-products/{saved_product_id}/notes", summary="Update product notes")
+def update_notes(saved_product_id: int, payload: UpdateNotesRequest, current_user: dict = Depends(auth.get_current_user)):
+    """Update notes for a saved product.
+    
+    Args:
+        saved_product_id: The saved product ID
+        payload: JSON body containing notes
+        current_user: The authenticated user
+        
+    Returns:
+        Success message
+    """
+    updated = database.update_product_notes(saved_product_id, current_user["user_id"], payload.notes)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Saved product not found")
+    return {"message": "Notes updated successfully"}
+
+
+@app.delete("/api/user/lists/{list_id}/products/{product_id}", summary="Remove product from list")
+def remove_product(list_id: int, product_id: int, current_user: dict = Depends(auth.get_current_user)):
+    """Remove a product from a list.
+    
+    Args:
+        list_id: The list ID
+        product_id: The product ID
+        current_user: The authenticated user
+        
+    Returns:
+        Success message
+    """
+    deleted = database.remove_product_from_list(list_id, product_id, current_user["user_id"])
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Product not found in list")
+    return {"message": "Product removed from list"}
+
+
+@app.get("/api/user/products/{product_id}/saved-status", summary="Check if product is saved")
+def check_saved_status(product_id: int, current_user: Optional[dict] = Depends(auth.get_current_user_optional)):
+    """Check which lists contain a product.
+    
+    Args:
+        product_id: The product ID
+        current_user: The authenticated user (optional)
+        
+    Returns:
+        List names that contain this product
+    """
+    if not current_user:
+        return {"lists": []}
+    
+    lists = database.is_product_saved(current_user["user_id"], product_id)
+    return {"lists": lists}
+
+
+# ========== Scraper Endpoints (Admin Protected) ==========
+
 @app.post("/api/scrape", summary="Scrape albums and extract tags")
-def scrape_endpoint(payload: ScrapeRequest):
+def scrape_endpoint(payload: ScrapeRequest, current_user: dict = Depends(auth.get_current_admin)):
     """Scrape the specified Yupoo base URL and store products in the database.
 
     Args:
@@ -356,16 +714,16 @@ def root():
 
 
 @app.delete("/api/database/clear", summary="Clear database (testing only)")
-def clear_database_endpoint():
+def clear_database_endpoint(current_user: dict = Depends(auth.get_current_admin)):
     """Clear all products from the database.
 
     WARNING: This endpoint deletes all stored products. Use with caution.
-    Intended for testing purposes only.
+    Intended for testing purposes only. Requires admin authentication.
 
     Returns:
         A dict with the number of products deleted.
     """
-    debug_print("=== CLEAR DATABASE REQUEST ===")
+    debug_print(f"=== CLEAR DATABASE REQUEST by {current_user['username']} ===")
     deleted = database.clear_database()
     debug_print(f"Deleted {deleted} products")
     return {
@@ -384,10 +742,10 @@ def clear_database_endpoint():
 # debug_print("--- TEMPORARY: Finished grey percentage adjustment on startup ---")
 
 @app.post("/api/colors/adjust", summary="Adjust special color percentages (e.g., grey, white)")
-def adjust_special_color_percentages_endpoint():
+def adjust_special_color_percentages_endpoint(current_user: dict = Depends(auth.get_current_admin)):
     """
     Adjusts the percentages of specified "special" colors (e.g., 'grey', 'white')
-    across all products in the database.
+    across all products in the database. Requires admin authentication.
     This process calculates the average percentage for each special color and then
     normalizes each product's color data based on this average, re-normalizing
     the percentages of all other colors proportionally.
@@ -395,7 +753,7 @@ def adjust_special_color_percentages_endpoint():
     Returns:
         A dictionary containing statistics about the adjustment.
     """
-    debug_print("=== ADJUST SPECIAL COLOR PERCENTAGES REQUEST ===")
+    debug_print(f"=== ADJUST SPECIAL COLOR PERCENTAGES REQUEST by {current_user['username']} ===")
     try:
         adjustment_summary = database.adjust_color_percentages(colors_to_adjust=["grey", "white"])
         debug_print(f"Special color percentage adjustment complete: {adjustment_summary}")

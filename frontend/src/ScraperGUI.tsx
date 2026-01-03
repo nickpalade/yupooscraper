@@ -40,6 +40,7 @@ interface ScraperGUIProps {
     handleClearDatabase: () => void;
     clearingDatabase: boolean;
     clearDatabaseMessage: string | null;
+    authToken: string | null;
 }
 
 const ScraperGUI: React.FC<ScraperGUIProps> = ({
@@ -59,6 +60,7 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
     handleClearDatabase,
     clearingDatabase,
     clearDatabaseMessage,
+    authToken,
 }) => {
   const [adjustingColorsLoading, setAdjustingColorsLoading] = useState<boolean>(false);
   const [adjustColorsMessage, setAdjustColorsMessage] = useState<string | null>(null);
@@ -71,6 +73,7 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
         },
       });
       const data = await response.json();

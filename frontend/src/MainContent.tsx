@@ -39,6 +39,9 @@ interface MainContentProps {
   setExclusiveTypeSearch: (exclusive: boolean) => void;
   performSearch: (tagsToSearch: Set<string>) => Promise<void>;
   highlightedProductId?: number | null;
+  isAuthenticated?: boolean;
+  authToken?: string | null;
+  onLoginRequired?: () => void;
 }
 
 const MainContent: React.FC<MainContentProps> = ({
@@ -74,6 +77,9 @@ const MainContent: React.FC<MainContentProps> = ({
   setExclusiveTypeSearch,
   performSearch,
   highlightedProductId,
+  isAuthenticated = false,
+  authToken = null,
+  onLoginRequired = () => {},
 }) => {
   const resultsRef = useRef<HTMLDivElement>(null);
   const [isScrolling, setIsScrolling] = React.useState(false);
@@ -314,6 +320,9 @@ const MainContent: React.FC<MainContentProps> = ({
                   shouldShowInstantly={instantItems.has(index)}
                   isScrolling={isScrolling}
                   isHighlighted={highlightedProductId === product.id}
+                  isAuthenticated={isAuthenticated}
+                  authToken={authToken}
+                  onLoginRequired={onLoginRequired}
                 />
               ))}
             </div>

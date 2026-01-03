@@ -90,6 +90,67 @@ def init_db(db_path: str = DB_NAME) -> None:
         except sqlite3.OperationalError as e:
             debug_print(f"Note: {e}")
     
+    # Create users table (replaces admin_users)
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            email TEXT UNIQUE,
+            hashed_password TEXT NOT NULL,
+            is_admin BOOLEAN DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+    )
+    debug_print("Created/verified users table")
+    
+    # Create user lists table
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_lists (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            list_name TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+            UNIQUE(user_id, list_name)
+        );
+        """
+    )
+    debug_print("Created/verified user_lists table")
+    
+    # Create saved products table
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS saved_products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            list_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            notes TEXT,
+            saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+            FOREIGN KEY (list_id) REFERENCES user_lists (id) ON DELETE CASCADE,
+            FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE,
+            UNIQUE(list_id, product_id)
+        );
+        """
+    )
+    debug_print("Created/verified saved_products table")
+    
+    # Migrate old admin_users data if exists
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='admin_users';")
+    if cursor.fetchone():
+        debug_print("Migrating admin_users to users table...")
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO users (id, username, hashed_password, is_admin, created_at)
+            SELECT id, username, hashed_password, 1, created_at FROM admin_users;
+            """
+        )
+        debug_print("Migration complete")
+    
     conn.commit()
     conn.close()
     debug_print("Database initialization complete")
@@ -555,3 +616,340 @@ def adjust_color_percentages(db_path: str = DB_NAME, colors_to_adjust: Optional[
         "products_updated": updated_product_count,
         "message": f"Color percentages adjusted for {updated_product_count} products."
     }
+
+
+# ========== User Management Functions ==========
+
+def create_user(username: str, hashed_password: str, email: Optional[str] = None, is_admin: bool = False, db_path: str = DB_NAME) -> int:
+    """Create a new user in the database.
+    
+    Args:
+        username: The username for the account
+        hashed_password: The bcrypt-hashed password
+        email: Optional email address
+        is_admin: Whether this user has admin privileges
+        db_path: Path to the SQLite database file
+        
+    Returns:
+        The ID of the created user
+        
+    Raises:
+        sqlite3.IntegrityError: If username or email already exists
+    """
+    user_type = "admin" if is_admin else "regular"
+    debug_print(f"Creating {user_type} user: {username}")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            INSERT INTO users (username, email, hashed_password, is_admin)
+            VALUES (?, ?, ?, ?);
+            """,
+            (username, email, hashed_password, 1 if is_admin else 0),
+        )
+        conn.commit()
+        user_id = cursor.lastrowid
+        debug_print(f"Successfully created {user_type} user with ID: {user_id}")
+        return user_id
+    except sqlite3.IntegrityError as e:
+        debug_print(f"ERROR creating user (username/email already exists): {e}")
+        raise
+    finally:
+        conn.close()
+
+
+def get_user_by_username(username: str, db_path: str = DB_NAME) -> Optional[Tuple[int, str, str, str, bool]]:
+    """Get a user by username.
+    
+    Args:
+        username: The username to look up
+        db_path: Path to the SQLite database file
+        
+    Returns:
+        A tuple (id, username, email, hashed_password, is_admin) if found, None otherwise
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, username, email, hashed_password, is_admin FROM users WHERE username = ?;",
+        (username,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return row
+
+
+def get_user_by_email(email: str, db_path: str = DB_NAME) -> Optional[Tuple[int, str, str, str, bool]]:
+    """Get a user by email.
+    
+    Args:
+        email: The email to look up
+        db_path: Path to the SQLite database file
+        
+    Returns:
+        A tuple (id, username, email, hashed_password, is_admin) if found, None otherwise
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, username, email, hashed_password, is_admin FROM users WHERE email = ?;",
+        (email,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return row
+
+
+def get_user_by_id(user_id: int, db_path: str = DB_NAME) -> Optional[Tuple[int, str, str, bool]]:
+    """Get a user by ID.
+    
+    Args:
+        user_id: The user ID to look up
+        db_path: Path to the SQLite database file
+        
+    Returns:
+        A tuple (id, username, email, is_admin) if found, None otherwise
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, username, email, is_admin FROM users WHERE id = ?;",
+        (user_id,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return row
+
+
+# ========== User List Management Functions ==========
+
+def create_user_list(user_id: int, list_name: str, db_path: str = DB_NAME) -> int:
+    """Create a new list for a user.
+    
+    Args:
+        user_id: The user's ID
+        list_name: Name of the list
+        db_path: Path to the SQLite database file
+        
+    Returns:
+        The ID of the created list
+    """
+    debug_print(f"Creating list '{list_name}' for user {user_id}")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO user_lists (user_id, list_name) VALUES (?, ?);",
+            (user_id, list_name),
+        )
+        conn.commit()
+        list_id = cursor.lastrowid
+        debug_print(f"Successfully created list with ID: {list_id}")
+        return list_id
+    finally:
+        conn.close()
+
+
+def get_user_lists(user_id: int, db_path: str = DB_NAME) -> List[Tuple[int, str]]:
+    """Get all lists for a user.
+    
+    Args:
+        user_id: The user's ID
+        db_path: Path to the SQLite database file
+        
+    Returns:
+        A list of tuples (list_id, list_name)
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, list_name FROM user_lists WHERE user_id = ? ORDER BY created_at DESC;",
+        (user_id,),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+
+def delete_user_list(list_id: int, user_id: int, db_path: str = DB_NAME) -> bool:
+    """Delete a list (only if it belongs to the user).
+    
+    Args:
+        list_id: The list ID to delete
+        user_id: The user's ID (for verification)
+        db_path: Path to the SQLite database file
+        
+    Returns:
+        True if deleted, False otherwise
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM user_lists WHERE id = ? AND user_id = ?;",
+        (list_id, user_id),
+    )
+    conn.commit()
+    deleted = cursor.rowcount > 0
+    conn.close()
+    return deleted
+
+
+def rename_user_list(list_id: int, user_id: int, new_name: str, db_path: str = DB_NAME) -> bool:
+    """Rename a list.
+    
+    Args:
+        list_id: The list ID to rename
+        user_id: The user's ID (for verification)
+        new_name: New name for the list
+        db_path: Path to the SQLite database file
+        
+    Returns:
+        True if renamed, False otherwise
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE user_lists SET list_name = ? WHERE id = ? AND user_id = ?;",
+        (new_name, list_id, user_id),
+    )
+    conn.commit()
+    updated = cursor.rowcount > 0
+    conn.close()
+    return updated
+
+
+# ========== Saved Products Management Functions ==========
+
+def save_product_to_list(user_id: int, list_id: int, product_id: int, notes: Optional[str] = None, db_path: str = DB_NAME) -> int:
+    """Save a product to a user's list.
+    
+    Args:
+        user_id: The user's ID
+        list_id: The list ID
+        product_id: The product ID
+        notes: Optional notes about the product
+        db_path: Path to the SQLite database file
+        
+    Returns:
+        The ID of the saved product entry
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT OR REPLACE INTO saved_products (user_id, list_id, product_id, notes) VALUES (?, ?, ?, ?);",
+            (user_id, list_id, product_id, notes),
+        )
+        conn.commit()
+        saved_id = cursor.lastrowid
+        return saved_id
+    finally:
+        conn.close()
+
+
+def get_saved_products_in_list(list_id: int, user_id: int, db_path: str = DB_NAME) -> List[Tuple[int, int, str, str]]:
+    """Get all saved products in a list.
+    
+    Args:
+        list_id: The list ID
+        user_id: The user's ID (for verification)
+        db_path: Path to the SQLite database file
+        
+    Returns:
+        A list of tuples (saved_product_id, product_id, notes, saved_at)
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT sp.id, sp.product_id, sp.notes, sp.saved_at
+        FROM saved_products sp
+        JOIN user_lists ul ON sp.list_id = ul.id
+        WHERE sp.list_id = ? AND ul.user_id = ?
+        ORDER BY sp.saved_at DESC;
+        """,
+        (list_id, user_id),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+
+def update_product_notes(saved_product_id: int, user_id: int, notes: str, db_path: str = DB_NAME) -> bool:
+    """Update notes for a saved product.
+    
+    Args:
+        saved_product_id: The saved product ID
+        user_id: The user's ID (for verification)
+        notes: New notes
+        db_path: Path to the SQLite database file
+        
+    Returns:
+        True if updated, False otherwise
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE saved_products SET notes = ? WHERE id = ? AND user_id = ?;",
+        (notes, saved_product_id, user_id),
+    )
+    conn.commit()
+    updated = cursor.rowcount > 0
+    conn.close()
+    return updated
+
+
+def remove_product_from_list(list_id: int, product_id: int, user_id: int, db_path: str = DB_NAME) -> bool:
+    """Remove a product from a list.
+    
+    Args:
+        list_id: The list ID
+        product_id: The product ID
+        user_id: The user's ID (for verification)
+        db_path: Path to the SQLite database file
+        
+    Returns:
+        True if removed, False otherwise
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        DELETE FROM saved_products
+        WHERE list_id = ? AND product_id = ? AND user_id = ?;
+        """,
+        (list_id, product_id, user_id),
+    )
+    conn.commit()
+    deleted = cursor.rowcount > 0
+    conn.close()
+    return deleted
+
+
+def is_product_saved(user_id: int, product_id: int, db_path: str = DB_NAME) -> List[str]:
+    """Check which lists contain a product for a user.
+    
+    Args:
+        user_id: The user's ID
+        product_id: The product ID
+        db_path: Path to the SQLite database file
+        
+    Returns:
+        List of list names that contain this product
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT ul.list_name
+        FROM saved_products sp
+        JOIN user_lists ul ON sp.list_id = ul.id
+        WHERE sp.user_id = ? AND sp.product_id = ?;
+        """,
+        (user_id, product_id),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [row[0] for row in rows]
+
