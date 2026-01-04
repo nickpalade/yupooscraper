@@ -21,6 +21,7 @@ interface ProductCardProps {
     authToken?: string | null;
     onLoginRequired?: () => void;
     showSaveButton?: boolean;
+    onImageLoaded?: (index: number) => void;
 }
 
 function buildAllChinaBuyUrl(productUrl: string): string {
@@ -59,7 +60,8 @@ const ProductCard: React.FC<ProductCardProps> = ({
     isAuthenticated = false,
     authToken = null,
     onLoginRequired = () => {},
-    showSaveButton = true
+    showSaveButton = true,
+    onImageLoaded = () => {}
 }) => {
     const [isFetchingLink, setIsFetchingLink] = useState(false);
     const [pendingSimilarSearch, setPendingSimilarSearch] = useState<boolean | null>(null);
@@ -154,7 +156,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
             data-product-card
             data-index={index}
             data-product-id={product.id}
-            className={`flex flex-col overflow-hidden transition-all rounded-xl border ${shouldAnimate && !isScrolling && !shouldShowInstantly ? 'animate-fadeInUp' : ''} ${isHighlighted ? 'ring-8 ring-red-500' : ''}`}
+            className={`flex flex-col transition-all rounded-xl border ${shouldAnimate && !isScrolling && !shouldShowInstantly ? 'animate-fadeInUp' : ''} ${isHighlighted ? 'ring-8 ring-red-500' : ''}`}
             style={{
                 backgroundColor: 'var(--card-bg)',
                 borderColor: 'var(--border-color)',
@@ -162,12 +164,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
                 animation: isHighlighted && !(shouldAnimate && !isScrolling && !shouldShowInstantly) ? 'highlightFadeOut 2s ease-out forwards' : undefined,
                 animationDelay: shouldAnimate && !isScrolling && !shouldShowInstantly ? `${index * 50}ms` : '0ms',
                 animationFillMode: 'forwards',
-                opacity: shouldShowInstantly || isScrolling ? 1 : (shouldAnimate ? 0 : 1),
+                opacity: shouldShowInstantly || isScrolling ? 1 : 0,
+                overflow: 'visible',
             }}
         >
             <div
-                className="relative w-full overflow-hidden aspect-square group"
-                style={{ backgroundColor: 'var(--card-bg)' }}
+                className="relative w-full aspect-square group"
+                style={{ backgroundColor: 'var(--card-bg)', overflow: 'visible' }}
             >
                 {showSaveButton && (
                     <div className="absolute z-20 transition-opacity duration-200 opacity-0 top-2 right-2 group-hover:opacity-100" onMouseLeave={() => window.dispatchEvent(new Event('saveButtonHoverEnd'))}>
@@ -184,15 +187,17 @@ const ProductCard: React.FC<ProductCardProps> = ({
                 <img
                     src={product.image_path ? product.image_path : product.image_url}
                     alt={product.album_title || "Product cover"}
-                    className="object-cover w-full h-full transition-transform duration-300 cursor-pointer group-hover:scale-110"
+                    className="object-cover w-full h-full transition-transform duration-300 cursor-pointer"
                     onClick={handleImageClick}
+                    onLoad={() => onImageLoaded(index)}
                     onError={(e) => {
                         e.currentTarget.src = 'https://via.placeholder.com/400?text=Image+Not+Found';
+                        onImageLoaded(index); // Also mark as loaded on error
                     }}
-                    loading="lazy"
+                    loading="eager"
                 />
                 <div 
-                    className="absolute inset-0 flex items-center justify-center transition-opacity duration-300 pointer-events-none group-hover:bg-black/30"
+                    className="absolute inset-0 flex items-center justify-center transition-opacity duration-300 pointer-events-none group-hover:bg-black/10"
                 >
                     <Search size={40} className="transition-opacity duration-300 opacity-0 group-hover:opacity-100" style={{ color: 'var(--button-text)' }} />
                 </div>

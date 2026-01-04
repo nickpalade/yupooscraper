@@ -165,7 +165,7 @@ const SaveButton: React.FC<SaveButtonProps> = ({
                 onMouseDown={(e) => e.stopPropagation()}
                 className={`${compact ? 'p-2' : 'px-4 py-2'} rounded-lg transition-all backdrop-blur-md border`}
                 style={{
-                    backgroundColor: isSaved ? 'var(--primary-color)' : 'var(--glass-bg)',
+                    backgroundColor: isSaved ? 'var(--primary-color)' : 'rgba(255, 255, 255, 0.25)',
                     borderColor: 'var(--glass-border)',
                     color: 'var(--text-color)',
                     boxShadow: `0 4px 16px var(--glass-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.1)`
@@ -182,11 +182,11 @@ const SaveButton: React.FC<SaveButtonProps> = ({
             {showListMenu && (
                 <>
                     <div 
-                        className="fixed inset-0 z-40 animate-fadeIn" 
+                        className="fixed inset-0 z-[9998] animate-fadeIn" 
                         onClick={() => setShowListMenu(false)}
                     />
                     <div 
-                        className="absolute right-0 z-50 w-64 mt-2 border rounded-lg shadow-2xl backdrop-blur overflow-hidden animate-fadeIn"
+                        className="absolute right-0 z-[9999] w-64 mt-2 border rounded-lg shadow-2xl backdrop-blur overflow-hidden animate-fadeIn"
                         style={{
                             backgroundColor: 'var(--card-bg)',
                             borderColor: 'var(--glass-border)',

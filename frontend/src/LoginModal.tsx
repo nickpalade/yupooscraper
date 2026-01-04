@@ -16,6 +16,21 @@ const LoginModal: React.FC<LoginModalProps> = ({ show, onClose, onLoginSuccess }
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Add dynamic placeholder styling for inputs
+    React.useEffect(() => {
+        if (show) {
+            const style = document.createElement('style');
+            style.textContent = `
+                .login-input::placeholder {
+                    color: var(--input-text);
+                    opacity: 0.5;
+                }
+            `;
+            document.head.appendChild(style);
+            return () => document.head.removeChild(style);
+        }
+    }, [show]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
@@ -84,12 +99,17 @@ const LoginModal: React.FC<LoginModalProps> = ({ show, onClose, onLoginSuccess }
     if (!show) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="relative w-full max-w-md p-8 m-4 border shadow-2xl backdrop-blur-xl bg-gradient-to-br from-blue-900/30 to-purple-900/30 border-white/20 rounded-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+            <div className="relative w-full max-w-md p-8 m-4 border shadow-2xl rounded-2xl backdrop-blur-xl" style={{
+                backgroundColor: 'var(--card-bg)',
+                borderColor: 'var(--glass-border)',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), inset 0 1px 1px 0 rgba(255, 255, 255, 0.2)',
+            }}>
                 {/* Close button */}
                 <button
                     onClick={onClose}
-                    className="absolute text-white transition-colors top-4 right-4 hover:text-red-400"
+                    className="absolute transition-colors top-4 right-4 hover:opacity-70"
+                    style={{ color: 'var(--text-color)' }}
                     aria-label="Close"
                 >
                     <X size={24} />
@@ -97,29 +117,32 @@ const LoginModal: React.FC<LoginModalProps> = ({ show, onClose, onLoginSuccess }
 
                 {/* Header */}
                 <div className="flex items-center justify-center mb-6">
-                    <div className="p-3 mr-3 rounded-full bg-white/10">
-                        <Lock className="text-blue-400" size={28} />
+                    <div className="p-3 mr-3 rounded-full" style={{ backgroundColor: 'var(--glass-bg)', borderColor: 'var(--glass-border)', border: '1px solid' }}>
+                        <Lock style={{ color: 'var(--primary-color)' }} size={28} />
                     </div>
-                    <h2 className="text-3xl font-bold text-white">
+                    <h2 className="text-3xl font-bold" style={{ color: 'var(--text-color)' }}>
                         {isSignup ? 'Create Account' : 'Welcome Back'}
                     </h2>
                 </div>
 
-                <p className="mb-6 text-center text-white/70">
+                <p className="mb-6 text-center" style={{ color: 'var(--text-color)', opacity: 0.7 }}>
                     {isSignup ? 'Join to save your favorite products' : 'Sign in to access your saved products'}
                 </p>
 
                 {/* Error message */}
                 {error && (
-                    <div className="p-3 mb-4 border rounded-lg bg-red-500/20 border-red-500/50">
-                        <p className="text-sm text-red-200">{error}</p>
+                    <div className="p-3 mb-4 border rounded-lg" style={{ 
+                        backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                        borderColor: 'rgba(239, 68, 68, 0.5)',
+                    }}>
+                        <p style={{ color: 'rgba(239, 68, 68, 0.9)', fontSize: '0.875rem' }}>{error}</p>
                     </div>
                 )}
 
                 {/* Login/Signup form */}
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block mb-2 text-sm font-semibold text-white">
+                        <label className="block mb-2 text-sm font-semibold" style={{ color: 'var(--text-color)' }}>
                             <User className="inline mr-2" size={16} />
                             Username
                         </label>
@@ -130,15 +153,29 @@ const LoginModal: React.FC<LoginModalProps> = ({ show, onClose, onLoginSuccess }
                             placeholder="Enter username"
                             required
                             disabled={loading}
-                            className="w-full p-3 text-white border rounded-lg backdrop-blur-md bg-white/10 border-white/20 placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:shadow-lg focus:shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                            style={{
+                                backgroundColor: 'var(--input-bg)',
+                                borderColor: 'var(--input-border)',
+                                color: 'var(--input-text)',
+                                caretColor: 'var(--primary-color)',
+                            } as React.CSSProperties & { '--placeholder-color': string }}
+                            className="w-full p-3 border rounded-lg backdrop-blur-md focus:outline-none focus:ring-2 focus:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed login-input"
+                            onFocus={(e) => {
+                                e.currentTarget.style.boxShadow = `0 0 0 2px var(--primary-color)`;
+                                e.currentTarget.style.borderColor = 'var(--primary-color)';
+                            }}
+                            onBlur={(e) => {
+                                e.currentTarget.style.boxShadow = 'none';
+                                e.currentTarget.style.borderColor = 'var(--input-border)';
+                            }}
                         />
                     </div>
 
                     {isSignup && (
                         <div>
-                            <label className="block mb-2 text-sm font-semibold text-white">
+                            <label className="block mb-2 text-sm font-semibold" style={{ color: 'var(--text-color)' }}>
                                 <Mail className="inline mr-2" size={16} />
-                                Email <span className="text-white/50">(optional)</span>
+                                Email <span style={{ color: 'var(--text-color)', opacity: 0.5 }}>(optional)</span>
                             </label>
                             <input
                                 type="email"
@@ -146,13 +183,27 @@ const LoginModal: React.FC<LoginModalProps> = ({ show, onClose, onLoginSuccess }
                                 onChange={(e) => setEmail(e.target.value)}
                                 placeholder="Enter email"
                                 disabled={loading}
-                                className="w-full p-3 text-white border rounded-lg backdrop-blur-md bg-white/10 border-white/20 placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:shadow-lg focus:shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{
+                                    backgroundColor: 'var(--input-bg)',
+                                    borderColor: 'var(--input-border)',
+                                    color: 'var(--input-text)',
+                                    caretColor: 'var(--primary-color)',
+                                }}
+                                className="w-full p-3 border rounded-lg backdrop-blur-md focus:outline-none focus:ring-2 focus:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed login-input"
+                                onFocus={(e) => {
+                                    e.currentTarget.style.boxShadow = `0 0 0 2px var(--primary-color)`;
+                                    e.currentTarget.style.borderColor = 'var(--primary-color)';
+                                }}
+                                onBlur={(e) => {
+                                    e.currentTarget.style.boxShadow = 'none';
+                                    e.currentTarget.style.borderColor = 'var(--input-border)';
+                                }}
                             />
                         </div>
                     )}
 
                     <div>
-                        <label className="block mb-2 text-sm font-semibold text-white">
+                        <label className="block mb-2 text-sm font-semibold" style={{ color: 'var(--text-color)' }}>
                             <Lock className="inline mr-2" size={16} />
                             Password
                         </label>
@@ -163,13 +214,27 @@ const LoginModal: React.FC<LoginModalProps> = ({ show, onClose, onLoginSuccess }
                             placeholder="Enter password"
                             required
                             disabled={loading}
-                            className="w-full p-3 text-white border rounded-lg backdrop-blur-md bg-white/10 border-white/20 placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:shadow-lg focus:shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                            style={{
+                                backgroundColor: 'var(--input-bg)',
+                                borderColor: 'var(--input-border)',
+                                color: 'var(--input-text)',
+                                caretColor: 'var(--primary-color)',
+                            }}
+                            className="w-full p-3 border rounded-lg backdrop-blur-md focus:outline-none focus:ring-2 focus:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            onFocus={(e) => {
+                                e.currentTarget.style.boxShadow = `0 0 0 2px var(--primary-color)`;
+                                e.currentTarget.style.borderColor = 'var(--primary-color)';
+                            }}
+                            onBlur={(e) => {
+                                e.currentTarget.style.boxShadow = 'none';
+                                e.currentTarget.style.borderColor = 'var(--input-border)';
+                            }}
                         />
                     </div>
 
                     {isSignup && (
                         <div>
-                            <label className="block mb-2 text-sm font-semibold text-white">
+                            <label className="block mb-2 text-sm font-semibold" style={{ color: 'var(--text-color)' }}>
                                 <Lock className="inline mr-2" size={16} />
                                 Confirm Password
                             </label>
@@ -180,7 +245,21 @@ const LoginModal: React.FC<LoginModalProps> = ({ show, onClose, onLoginSuccess }
                                 placeholder="Confirm password"
                                 required
                                 disabled={loading}
-                                className="w-full p-3 text-white border rounded-lg backdrop-blur-md bg-white/10 border-white/20 placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:shadow-lg focus:shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{
+                                    backgroundColor: 'var(--input-bg)',
+                                    borderColor: 'var(--input-border)',
+                                    color: 'var(--input-text)',
+                                    caretColor: 'var(--primary-color)',
+                                }}
+                                className="w-full p-3 border rounded-lg backdrop-blur-md focus:outline-none focus:ring-2 focus:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed login-input"
+                                onFocus={(e) => {
+                                    e.currentTarget.style.boxShadow = `0 0 0 2px var(--primary-color)`;
+                                    e.currentTarget.style.borderColor = 'var(--primary-color)';
+                                }}
+                                onBlur={(e) => {
+                                    e.currentTarget.style.boxShadow = 'none';
+                                    e.currentTarget.style.borderColor = 'var(--input-border)';
+                                }}
                             />
                         </div>
                     )}
@@ -188,7 +267,12 @@ const LoginModal: React.FC<LoginModalProps> = ({ show, onClose, onLoginSuccess }
                     <button
                         type="submit"
                         disabled={loading}
-                        className="flex items-center justify-center w-full px-6 py-3 font-semibold text-white transition-all transform bg-blue-600 rounded-lg shadow-lg hover:bg-blue-700 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                        style={{
+                            backgroundColor: 'var(--button-bg)',
+                            color: 'var(--button-text)',
+                            borderColor: 'var(--glass-border)',
+                        }}
+                        className="flex items-center justify-center w-full px-6 py-3 font-semibold transition-all transform border rounded-lg shadow-lg hover:scale-105 focus:outline-none focus:ring-2 focus:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                     >
                         {loading ? (
                             <>
@@ -207,7 +291,8 @@ const LoginModal: React.FC<LoginModalProps> = ({ show, onClose, onLoginSuccess }
                 <div className="mt-6 text-center">
                     <button
                         onClick={toggleMode}
-                        className="text-sm text-blue-300 transition-colors hover:text-blue-200"
+                        className="text-sm transition-colors hover:opacity-70"
+                        style={{ color: 'var(--primary-color)' }}
                         disabled={loading}
                     >
                         {isSignup ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}

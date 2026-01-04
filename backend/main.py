@@ -765,3 +765,65 @@ def adjust_special_color_percentages_endpoint(current_user: dict = Depends(auth.
     except Exception as e:
         debug_print(f"ERROR adjusting special color percentages: {e}")
         raise HTTPException(status_code=500, detail=f"An error occurred during special color percentage adjustment: {str(e)}")
+
+
+@app.post("/api/colors/retag", summary="Retag all products with color detection")
+def retag_all_products_endpoint(current_user: dict = Depends(auth.get_current_admin)):
+    """
+    Rerun the color tagging process for all products in the database.
+    Downloads the image for each product, extracts dominant colors and color tags,
+    and updates the database with the new tags and color data.
+    Requires admin authentication.
+
+    Returns:
+        A dictionary containing statistics about the retagging process.
+    """
+    debug_print(f"=== RETAG ALL PRODUCTS REQUEST by {current_user['username']} ===")
+    try:
+        # Get all products
+        products = database.get_all_product_images()
+        debug_print(f"Starting retagging for {len(products)} products")
+        
+        processed = 0
+        failed = 0
+        updated = 0
+        
+        for product_id, image_url, album_title, existing_tags in products:
+            try:
+                # Generate new color and company tags from vision analysis
+                new_tags, colors_data = vision.generate_tags_for_image(image_url, album_title or "")
+                
+                # Preserve existing type_ tags and other non-color/company tags
+                preserved_tags = [tag for tag in existing_tags if tag.startswith('type_')]
+                
+                # Combine preserved tags with new color/company tags
+                final_tags = preserved_tags + new_tags
+                
+                # Remove duplicates while preserving order
+                final_tags = list(dict.fromkeys(final_tags))
+                
+                # Update the product in the database
+                database.update_product_tags_and_colors(product_id, final_tags, colors_data)
+                updated += 1
+                processed += 1
+                
+            except Exception as e:
+                debug_print(f"Error retagging product {product_id}: {e}")
+                failed += 1
+                processed += 1
+            
+            # Log progress every 10 products
+            if processed % 10 == 0:
+                debug_print(f"Progress: {processed}/{len(products)} products processed")
+        
+        debug_print(f"Retagging complete: {updated} updated, {failed} failed")
+        return {
+            "status": "success",
+            "message": "Retagging complete",
+            "total": len(products),
+            "updated": updated,
+            "failed": failed
+        }
+    except Exception as e:
+        debug_print(f"ERROR during retagging: {e}")
+        raise HTTPException(status_code=500, detail=f"An error occurred during retagging: {str(e)}")

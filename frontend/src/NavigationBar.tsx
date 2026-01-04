@@ -80,7 +80,7 @@ const NavigationBar: React.FC<NavigationBarProps> = ({
             }}
           >
             <Home size={20} />
-            Home
+            <span className="hidden sm:inline">Home</span>
           </button>
           {isAuthenticated && (
             <button
@@ -109,24 +109,26 @@ const NavigationBar: React.FC<NavigationBarProps> = ({
               }}
             >
               <Zap size={20} />
-              Scraper
+              <span className="hidden sm:inline">Scraper</span>
             </button>
           )}
           <button
             onClick={onSettingsClick}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold glass-button"
+            className="flex items-center justify-center text-sm font-semibold glass-button"
             style={{
               backgroundColor: 'var(--accent-color)',
               color: 'var(--button-text)',
               borderColor: 'var(--glass-border)',
               transition: 'all 300ms ease-in-out',
+              aspectRatio: '1 / 1',
+              padding: '0.5rem',
             }}
           >
             <SettingsIcon size={20} />
           </button>
           {isAuthenticated ? (
             <div className="flex items-center gap-2">
-              <span className="hidden text-sm font-medium text-white sm:block">{username}</span>
+              <span className="hidden text-sm font-medium sm:block" style={{ color: 'var(--text-color)' }}>{username}</span>
               <button
                 onClick={onLogoutClick}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-semibold glass-button"

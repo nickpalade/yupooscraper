@@ -64,6 +64,8 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
 }) => {
   const [adjustingColorsLoading, setAdjustingColorsLoading] = useState<boolean>(false);
   const [adjustColorsMessage, setAdjustColorsMessage] = useState<string | null>(null);
+  const [retaggingLoading, setRetaggingLoading] = useState<boolean>(false);
+  const [retaggingMessage, setRetaggingMessage] = useState<string | null>(null);
 
   const handleAdjustColors = async () => {
     setAdjustingColorsLoading(true);
@@ -89,23 +91,60 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
     }
   };
 
+  const handleRetag = async () => {
+    setRetaggingLoading(true);
+    setRetaggingMessage(null);
+    try {
+      const response = await fetch('/api/colors/retag', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setRetaggingMessage(`Success: ${data.message} - Updated ${data.updated}/${data.total} products${data.failed > 0 ? `, ${data.failed} failed` : ''}`);
+      } else {
+        setRetaggingMessage(`Error: ${data.detail || 'Failed to retag products'}`);
+      }
+    } catch (error) {
+      setRetaggingMessage(`Network error: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setRetaggingLoading(false);
+    }
+  };
+
   return (
     <div className="max-w-2xl p-8 mx-auto mb-8 border shadow-2xl backdrop-blur-xl bg-white/10 border-white/20 rounded-xl shadow-black/30">
-      <h2 className="mb-6 text-2xl font-bold text-white">Scrape a Yupoo Store</h2>
+      <h2 className="mb-6 text-2xl font-bold" style={{ color: 'var(--text-color)' }}>Scrape a Yupoo Store</h2>
       <form onSubmit={handleScrape} className="space-y-4">
         <div>
-          <label className="block mb-2 text-sm font-semibold text-white">Yupoo Store URL</label>
+          <label className="block mb-2 text-sm font-semibold" style={{ color: 'var(--text-color)' }}>Yupoo Store URL</label>
           <input
             type="url"
             value={scrapeUrl}
             onChange={(e) => setScrapeUrl(e.target.value)}
             placeholder="https://example.x.yupoo.com"
-            className="w-full p-3 text-white border rounded-lg backdrop-blur-md bg-white/10 border-white/20 placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:shadow-lg focus:shadow-blue-500/30"
+            className="w-full p-3 border rounded-lg backdrop-blur-md focus:outline-none focus:ring-2 focus:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            style={{
+              backgroundColor: 'var(--input-bg)',
+              borderColor: 'var(--input-border)',
+              color: 'var(--input-text)',
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.boxShadow = `0 0 0 2px var(--primary-color)`;
+              e.currentTarget.style.borderColor = 'var(--primary-color)';
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.boxShadow = 'none';
+              e.currentTarget.style.borderColor = 'var(--input-border)';
+            }}
             disabled={scrapingLoading}
           />
         </div>
         <div>
-          <label className="block mb-2 text-sm font-semibold text-white">Maximum Albums: {maxAlbums}</label>
+          <label className="block mb-2 text-sm font-semibold" style={{ color: 'var(--text-color)' }}>Maximum Albums: {maxAlbums}</label>
           <input
             type="range"
             min="0"
@@ -142,7 +181,7 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
       {/* New button for color adjustment */}
       <button
         onClick={handleAdjustColors}
-        disabled={adjustingColorsLoading || scrapingLoading}
+        disabled={adjustingColorsLoading || scrapingLoading || retaggingLoading}
         className="flex items-center justify-center w-full gap-2 py-3 mt-4 font-semibold text-white transition-colors border rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 backdrop-blur-md border-white/20 hover:shadow-lg hover:shadow-purple-500/50 disabled:bg-gray-400"
       >
         {adjustingColorsLoading ? (
@@ -158,10 +197,29 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
         )}
       </button>
 
+      {/* New button for color retagging */}
+      <button
+        onClick={handleRetag}
+        disabled={retaggingLoading || scrapingLoading || adjustingColorsLoading}
+        className="flex items-center justify-center w-full gap-2 py-3 mt-4 font-semibold text-white transition-colors border rounded-lg bg-gradient-to-r from-indigo-500 to-cyan-500 backdrop-blur-md border-white/20 hover:shadow-lg hover:shadow-indigo-500/50 disabled:bg-gray-400"
+      >
+        {retaggingLoading ? (
+          <>
+            <Loader size={20} className="animate-spin" />
+            Retagging Products...
+          </>
+        ) : (
+          <>
+            <RotateCw size={20} />
+            Retag All Products (Colors)
+          </>
+        )}
+      </button>
+
       {/* Clear Database button */}
       <button
         onClick={handleClearDatabase}
-        disabled={clearingDatabase || scrapingLoading || adjustingColorsLoading}
+        disabled={clearingDatabase || scrapingLoading || adjustingColorsLoading || retaggingLoading}
         className="flex items-center justify-center w-full gap-2 py-3 mt-4 font-semibold text-white transition-colors border rounded-lg bg-gradient-to-r from-red-500 to-rose-500 backdrop-blur-md border-white/20 hover:shadow-lg hover:shadow-red-500/50 disabled:bg-gray-400"
       >
         {clearingDatabase ? (
@@ -186,6 +244,12 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
       {adjustColorsMessage && (
         <div className={`flex items-center gap-2 p-4 mt-4 text-white transition-opacity border rounded-lg shadow-lg backdrop-blur-md ${adjustColorsMessage.startsWith('Error') ? 'bg-red-500/30 border-red-400/50 shadow-red-500/30' : 'bg-green-500/30 border-green-400/50 shadow-green-500/30'}`}>
           {adjustColorsMessage.startsWith('Error') ? <AlertTriangle size={20} /> : <CheckCircle size={20} />} {adjustColorsMessage}
+        </div>
+      )}
+
+      {retaggingMessage && (
+        <div className={`flex items-center gap-2 p-4 mt-4 text-white transition-opacity border rounded-lg shadow-lg backdrop-blur-md ${retaggingMessage.startsWith('Error') ? 'bg-red-500/30 border-red-400/50 shadow-red-500/30' : 'bg-green-500/30 border-green-400/50 shadow-green-500/30'}`}>
+          {retaggingMessage.startsWith('Error') ? <AlertTriangle size={20} /> : <CheckCircle size={20} />} {retaggingMessage}
         </div>
       )}
 

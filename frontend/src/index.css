@@ -17,13 +17,13 @@
   --glass-border: rgba(200, 210, 230, 0.35); /* Consistent transparent border */
   --glass-shadow: rgba(0, 0, 0, 0.08);
   --glass-hover-bg: rgba(255, 255, 255, 0.35); /* Consistent transparent hover */
-  --input-bg: rgba(255, 255, 255, 0.35); /* Same as glass-bg for consistency */
+  --input-bg: rgba(255, 255, 255, 0.5); /* Same as glass-bg for consistency */
   --input-border: rgba(200, 210, 230, 0.35); /* Same as glass-border for consistency */
   --input-text: #1a202c;
   --button-bg: #4f46e5;
   --button-text: #ffffff;
   --button-hover-bg: #6366f1;
-  --card-bg: rgba(255, 255, 255, 0.55); /* More opaque for better readability */
+  --card-bg: rgba(255, 255, 255, 0.8); /* More opaque for better readability */
   --card-shadow: rgba(0, 0, 0, 0.08);
 
   /* Tag colors - Light Theme */
@@ -53,13 +53,13 @@
   --glass-border: rgba(71, 85, 105, 0.35); /* Consistent transparent border */
   --glass-shadow: rgba(0, 0, 0, 0.3);
   --glass-hover-bg: rgba(30, 41, 59, 0.35); /* Consistent transparent hover */
-  --input-bg: rgba(30, 41, 59, 0.35); /* Same as glass-bg for consistency */
+  --input-bg: rgba(30, 41, 59, 0.5); /* Same as glass-bg for consistency */
   --input-border: rgba(71, 85, 105, 0.35); /* Same as glass-border for consistency */
   --input-text: #f8fafc;
   --button-bg: #4338ca;
   --button-text: #ffffff;
   --button-hover-bg: #4f46e5;
-  --card-bg: rgba(30, 41, 59, 0.55); /* More opaque for better readability */
+  --card-bg: rgba(30, 41, 59, 0.4); /* More opaque for better readability */
   --card-shadow: rgba(0, 0, 0, 0.3);
 
   /* Tag colors - Dark Theme */

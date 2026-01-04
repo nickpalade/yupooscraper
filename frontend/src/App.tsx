@@ -378,6 +378,16 @@ const App: React.FC = () => {
     setSortByColor(currentSelectedColorTags);
 
     await performSearch(selectedTags);
+    
+    // Scroll to results section
+    setTimeout(() => {
+      const resultsElement = document.getElementById('search-results');
+      if (resultsElement) {
+        const navbarHeight = 112;
+        const y = resultsElement.getBoundingClientRect().top + window.scrollY - navbarHeight;
+        window.scrollTo({ top: y, behavior: 'smooth' });
+      }
+    }, 100);
   };
 
   const toggleTag = (tag: string) => {
@@ -420,6 +430,18 @@ const App: React.FC = () => {
     try {
       const response = await axios.get<Product[]>(`/api/products/all`);
       setProducts(response.data);
+      
+      // Scroll to results section (not on first visit)
+      if (!isFirstVisit && !isRestoring) {
+        setTimeout(() => {
+          const resultsElement = document.getElementById('search-results');
+          if (resultsElement) {
+            const navbarHeight = 112;
+            const y = resultsElement.getBoundingClientRect().top + window.scrollY - navbarHeight;
+            window.scrollTo({ top: y, behavior: 'smooth' });
+          }
+        }, 100);
+      }
     } catch (err: any) {
       setSearchError(err?.response?.data?.detail || 'An error occurred while fetching products');
     } finally {

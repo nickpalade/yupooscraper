@@ -21,7 +21,7 @@ interface SettingsContextType {
 // Default settings
 const defaultSettings: AppSettings = {
   tags: {
-    showColor: true,
+    showColor: false,
     showType: true,
     showCompany: true,
   },
@@ -187,7 +187,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-md p-8 overflow-y-auto rounded-2xl max-h-[90vh] transition-all duration-300" 
+        className="w-full max-w-sm p-6 overflow-y-auto rounded-2xl max-h-[90vh] transition-all duration-300" 
         onClick={(e) => e.stopPropagation()}
         style={{
           backgroundColor: darkMode ? 'var(--glass-bg)' : 'rgba(255, 255, 255, 0.7)',
@@ -198,35 +198,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           opacity: isOpen ? 1 : 0,
         }}
       >
-        <div className="flex items-center justify-between mb-8">
-          <h2 className="text-3xl font-bold" style={{ color: 'var(--text-color)' }}>Settings</h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold" style={{ color: 'var(--text-color)' }}>Settings</h2>
           <button
             onClick={onClose}
-            className="p-2 transition-all duration-200 rounded-full hover:scale-110"
+            className="flex items-center justify-center transition-all duration-200 rounded-full hover:scale-110"
             style={{
               backgroundColor: 'rgba(255, 255, 255, 0.1)',
               color: 'var(--text-color)',
+              width: '2rem',
+              height: '2rem',
+              aspectRatio: '1 / 1',
             }}
           >
-            <span className="text-2xl">×</span>
+            <span className="text-xl">×</span>
           </button>
         </div>
 
-        <div className="pb-8 mb-8" style={{
+        <div className="pb-6 mb-6" style={{
           borderBottom: '1px solid var(--glass-border)',
         }}>
-          <h3 className="mb-3 text-lg font-semibold" style={{ color: 'var(--text-color)' }}>Product Tag Display</h3>
-          <p className="mb-6 text-sm opacity-80" style={{ color: 'var(--text-color)' }}>
-            Choose which tag categories to display on product cards. Changes are saved automatically.
-          </p>
-          <div className="space-y-4">
+          <h3 className="mb-2 text-base font-semibold" style={{ color: 'var(--text-color)' }}>Product Tag Display</h3>
+          <div className="space-y-3">
             {(Object.keys(settings.tags) as Array<keyof AppSettings['tags']>).map(key => (
-              <div key={key} className="flex items-center justify-between p-4 transition-all duration-200 rounded-xl" style={{
+              <div key={key} className="flex items-center justify-between p-3 transition-all duration-200 rounded-lg" style={{
                 backgroundColor: 'rgba(255, 255, 255, 0.05)',
                 border: '1px solid var(--glass-border)',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
               }}>
-                <span className="font-medium" style={{ color: 'var(--text-color)' }}>{tagSettingLabels[key]}</span>
+                <span className="text-sm font-medium" style={{ color: 'var(--text-color)' }}>{tagSettingLabels[key]}</span>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
@@ -255,14 +254,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           </div>
         </div>
 
-        <div className="mb-8">
-          <h3 className="mb-3 text-lg font-semibold" style={{ color: 'var(--text-color)' }}>Theme Settings</h3>
-          <div className="flex items-center justify-between p-4 transition-all duration-200 rounded-xl" style={{
+        <div className="mb-6">
+          <h3 className="mb-3 text-base font-semibold" style={{ color: 'var(--text-color)' }}>Theme Settings</h3>
+          <div className="flex items-center justify-between p-3 transition-all duration-200 rounded-lg" style={{
             backgroundColor: 'rgba(255, 255, 255, 0.05)',
             border: '1px solid var(--glass-border)',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
           }}>
-            <span className="font-medium" style={{ color: 'var(--text-color)' }}>Dark Mode</span>
+            <span className="text-sm font-medium" style={{ color: 'var(--text-color)' }}>Dark Mode</span>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
@@ -291,12 +289,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
         <button
           onClick={onClose}
-          className="w-full px-4 py-3 rounded-xl font-semibold transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
+          className="w-full px-4 py-2 text-sm rounded-lg font-semibold transition-all duration-300 hover:scale-[1.02]"
           style={{
             backgroundColor: 'var(--button-bg)',
             color: 'var(--button-text)',
             border: '1px solid var(--glass-border)',
-            boxShadow: '0 0 20px var(--primary-color)',
           }}
         >
           Close

@@ -85,6 +85,8 @@ const MainContent: React.FC<MainContentProps> = ({
   const [isScrolling, setIsScrolling] = React.useState(false);
   const [animatedItems, setAnimatedItems] = React.useState<Set<number>>(new Set());
   const [instantItems, setInstantItems] = React.useState<Set<number>>(new Set());
+  const [imagesLoaded, setImagesLoaded] = React.useState<Set<number>>(new Set());
+  const [waitingForImages, setWaitingForImages] = React.useState<Set<number>>(new Set());
   const scrollTimeoutRef = useRef<number | null>(null);
 
   const handlePageChange = (page: number) => {
@@ -114,18 +116,24 @@ const MainContent: React.FC<MainContentProps> = ({
           setCurrentPage(page);
           setAnimatedItems(new Set());
           setInstantItems(new Set());
+          setImagesLoaded(new Set());
+          setWaitingForImages(new Set());
         }, 800); // Smooth scroll typically takes 500-800ms
       } else {
         // No scrolling needed, change page immediately
         setCurrentPage(page);
         setAnimatedItems(new Set());
         setInstantItems(new Set());
+        setImagesLoaded(new Set());
+        setWaitingForImages(new Set());
       }
     } else {
       // No resultsRef, just change page
       setCurrentPage(page);
       setAnimatedItems(new Set());
       setInstantItems(new Set());
+      setImagesLoaded(new Set());
+      setWaitingForImages(new Set());
     }
   };
 
@@ -137,9 +145,21 @@ const MainContent: React.FC<MainContentProps> = ({
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
     const currentItems = products.slice(indexOfFirstItem, indexOfLastItem);
 
+    // Identify items that should be in the initial viewport
+    const viewportHeight = window.innerHeight;
+    const initialViewportIndices = new Set<number>();
+    
+    // Estimate how many items fit in viewport (rough calculation)
+    const estimatedItemsInViewport = Math.ceil(viewportHeight / 300) * 3; // Assuming ~300px height per row
+    for (let i = 0; i < Math.min(estimatedItemsInViewport, currentItems.length); i++) {
+      initialViewportIndices.add(i);
+    }
+    
+    // Mark these items as waiting for images
+    setWaitingForImages(initialViewportIndices);
+
     const observer = new IntersectionObserver(
       (entries) => {
-        const viewportHeight = window.innerHeight;
         const bufferSpace = viewportHeight * 2; // Two full screens as buffer
 
         entries.forEach((entry) => {
@@ -147,13 +167,16 @@ const MainContent: React.FC<MainContentProps> = ({
             const index = parseInt(entry.target.getAttribute('data-index') || '0', 10);
             const rect = entry.target.getBoundingClientRect();
             
-            // Check if item is within viewport + buffer (should animate)
+            // Check if item is within viewport + buffer
             if (rect.top < viewportHeight + bufferSpace) {
-              setAnimatedItems((prev) => {
-                const newSet = new Set(prev);
-                newSet.add(index);
-                return newSet;
-              });
+              // If this item is NOT in the initial waiting set, show it instantly (no animation)
+              if (!initialViewportIndices.has(index)) {
+                setInstantItems((prev) => {
+                  const newSet = new Set(prev);
+                  newSet.add(index);
+                  return newSet;
+                });
+              }
               
               // Check if this is the last visible item in the extended viewport
               if (rect.bottom > viewportHeight + bufferSpace) {
@@ -185,6 +208,29 @@ const MainContent: React.FC<MainContentProps> = ({
       observer.disconnect();
     };
   }, [currentPage, products, itemsPerPage]);
+
+  // Trigger animation once all initial images are loaded
+  React.useEffect(() => {
+    if (waitingForImages.size === 0) return;
+    
+    // Check if all waiting images have loaded
+    const allLoaded = Array.from(waitingForImages).every(index => imagesLoaded.has(index));
+    
+    if (allLoaded) {
+      // All images loaded, trigger animations
+      setAnimatedItems(new Set(waitingForImages));
+      setWaitingForImages(new Set()); // Clear waiting state
+    }
+  }, [imagesLoaded, waitingForImages]);
+
+  // Handle image load callback
+  const handleImageLoaded = React.useCallback((index: number) => {
+    setImagesLoaded((prev) => {
+      const newSet = new Set(prev);
+      newSet.add(index);
+      return newSet;
+    });
+  }, []);
 
   // Cleanup scroll timeout on unmount
   React.useEffect(() => {
@@ -271,7 +317,7 @@ const MainContent: React.FC<MainContentProps> = ({
           case 1: default: gridClass = 'grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4';
         }
         return (
-          <div className="mb-8" ref={resultsRef}>
+          <div className="mb-8" ref={resultsRef} id="search-results">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
               <h2 className="text-2xl font-bold" style={{ color: 'var(--text-color)' }}>
                 {showViewAll ? `All Products (${products.length})` : `Search Results (${products.length})`}
@@ -323,6 +369,7 @@ const MainContent: React.FC<MainContentProps> = ({
                   isAuthenticated={isAuthenticated}
                   authToken={authToken}
                   onLoginRequired={onLoginRequired}
+                  onImageLoaded={handleImageLoaded}
                 />
               ))}
             </div>
@@ -345,8 +392,10 @@ const MainContent: React.FC<MainContentProps> = ({
 
       {searchLoading && !scrapeProgress && (
         <div className="py-12 text-center">
-          <div className="inline-block">
-            <div className="w-12 h-12 border-b-2 rounded-full animate-spin" style={{ borderColor: 'var(--primary-color)' }}></div>
+          <div className="inline-block text-center">
+            <div className="flex items-center justify-center w-24 h-24 mx-auto mb-4 rounded-full backdrop-blur-md" style={{ backgroundColor: 'var(--glass-bg)' }}>
+              <Loader size={48} className="animate-spin" style={{ color: 'var(--primary-color)' }} />
+            </div>
             <p className="mt-4" style={{ color: 'var(--text-color)' }}>Loading products...</p>
           </div>
         </div>

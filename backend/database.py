@@ -953,3 +953,62 @@ def is_product_saved(user_id: int, product_id: int, db_path: str = DB_NAME) -> L
     conn.close()
     return [row[0] for row in rows]
 
+
+def get_all_product_images(db_path: str = DB_NAME) -> List[Tuple[int, str, str, List[str]]]:
+    """Get all product IDs, their image URLs, and existing tags for retagging.
+    
+    Args:
+        db_path: Path to the SQLite database file
+        
+    Returns:
+        List of tuples (product_id, image_url, album_title, existing_tags)
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, image_url, album_title, tags_json FROM products;"
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    # Parse tags_json for each row
+    result = []
+    for row in rows:
+        product_id, image_url, album_title, tags_json = row
+        existing_tags = json.loads(tags_json) if tags_json else []
+        result.append((product_id, image_url, album_title, existing_tags))
+    return result
+
+
+def update_product_tags_and_colors(product_id: int, tags: Iterable[str], colors_data: Optional[dict] = None, db_path: str = DB_NAME) -> None:
+    """Update the tags and colors for an existing product.
+    
+    Args:
+        product_id: The product ID to update
+        tags: New tags for the product
+        colors_data: Dictionary with color names and percentages
+        db_path: Path to the SQLite database file
+    """
+    tags_list = list(tags)
+    tags_json = json.dumps(tags_list)
+    colors_json = json.dumps(colors_data or {})
+    
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE products
+            SET tags_json = ?, colors_json = ?
+            WHERE id = ?;
+            """,
+            (tags_json, colors_json, product_id),
+        )
+        if cursor.rowcount > 0:
+            debug_print(f"Updated product {product_id} with new tags and colors")
+        conn.commit()
+    except Exception as e:
+        debug_print(f"ERROR updating product {product_id}: {e}")
+        raise
+    finally:
+        conn.close()
+
