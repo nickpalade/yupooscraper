@@ -122,6 +122,18 @@ class UpdateNotesRequest(BaseModel):
     notes: str
 
 
+@app.get("/", summary="Health check")
+def health_check():
+    """Health check endpoint to verify the backend is running."""
+    return {"status": "ok", "message": "Backend is running"}
+
+
+@app.get("/api", summary="API health check")
+def api_health_check():
+    """API health check endpoint."""
+    return {"status": "ok", "message": "API is running"}
+
+
 def save_image_locally(image_url: str) -> Optional[str]:
     """Download and save an image locally.
     
