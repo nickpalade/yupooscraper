@@ -111,7 +111,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
         if (!renameListName.trim() || !editingListId) return;
 
         try {
-            await axios.put(`/api/user/lists/${editingListId}`, {
+            await axios.put(buildApiUrl(`/api/user/lists/${editingListId}`), {
                 list_name: renameListName.trim()
             }, {
                 headers: { 'Authorization': `Bearer ${authToken}` }
@@ -134,7 +134,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
         if (!deletingListId) return;
 
         try {
-            await axios.delete(`/api/user/lists/${deletingListId}`, {
+            await axios.delete(buildApiUrl(`/api/user/lists/${deletingListId}`), {
                 headers: { 'Authorization': `Bearer ${authToken}` }
             });
             
@@ -156,7 +156,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
         if (!confirm('Remove this product from the list?')) return;
 
         try {
-            await axios.delete(`/api/user/lists/${selectedListId}/products/${productId}`, {
+            await axios.delete(buildApiUrl(`/api/user/lists/${selectedListId}/products/${productId}`), {
                 headers: { 'Authorization': `Bearer ${authToken}` }
             });
             setProducts(prev => prev.filter(p => p.product.id !== productId));
@@ -170,7 +170,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
         if (editingSavedProductId === null) return;
 
         try {
-            await axios.put(`/api/user/saved-products/${editingSavedProductId}/notes`, {
+            await axios.put(buildApiUrl(`/api/user/saved-products/${editingSavedProductId}/notes`), {
                 notes: editingNotes
             }, {
                 headers: { 'Authorization': `Bearer ${authToken}` }
@@ -232,7 +232,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                 {/* Lists Sidebar */}
                 <div className="lg:col-span-1">
                     <div 
-                        className="p-4 border rounded-xl backdrop-blur-2xl border-white/30 overflow-hidden"
+                        className="p-4 overflow-hidden border rounded-xl backdrop-blur-2xl border-white/30"
                         style={{
                             backgroundColor: 'var(--card-bg)',
                             boxShadow: `0 8px 32px var(--glass-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.1)`
@@ -247,7 +247,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                                     borderColor: 'var(--glass-border)',
                                     color: 'var(--button-text)'
                                 }}
-                                className="p-2 transition-all rounded-lg border hover:opacity-90 hover:shadow-lg"
+                                className="p-2 transition-all border rounded-lg hover:opacity-90 hover:shadow-lg"
                                 title="Create new list"
                             >
                                 <Plus size={20} />
@@ -347,7 +347,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                                                         color: savedProduct.notes ? 'var(--secondary-color)' : 'var(--text-color)',
                                                         boxShadow: `0 4px 12px var(--glass-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.1)`
                                                     }}
-                                                    className="p-2 rounded-lg backdrop-blur-md border transition-all hover:opacity-80 shadow-lg"
+                                                    className="p-2 transition-all border rounded-lg shadow-lg backdrop-blur-md hover:opacity-80"
                                                     title={savedProduct.notes ? 'Edit notes' : 'Add notes'}
                                                 >
                                                     <StickyNote size={18} />
@@ -359,7 +359,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                                                         borderColor: 'var(--glass-border)',
                                                         boxShadow: `0 4px 12px var(--glass-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.1)`
                                                     }}
-                                                    className="p-2 text-red-400 transition-all border rounded-lg backdrop-blur-md hover:bg-red-500/20 hover:border-red-400/30 hover:text-red-300 shadow-lg"
+                                                    className="p-2 text-red-400 transition-all border rounded-lg shadow-lg backdrop-blur-md hover:bg-red-500/20 hover:border-red-400/30 hover:text-red-300"
                                                     title="Remove from list"
                                                 >
                                                     <Trash2 size={18} />
@@ -408,7 +408,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                     >
                         <div className="flex items-center justify-between mb-4">
                             <h3 style={{ color: 'var(--text-color)' }} className="text-xl font-bold">Create New List</h3>
-                            <button onClick={() => setShowCreateModal(false)} style={{ color: 'var(--text-color)' }} className="opacity-50 hover:opacity-80 transition-opacity">
+                            <button onClick={() => setShowCreateModal(false)} style={{ color: 'var(--text-color)' }} className="transition-opacity opacity-50 hover:opacity-80">
                                 <X size={24} />
                             </button>
                         </div>
@@ -425,7 +425,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                                     color: 'var(--input-text)',
                                     caretColor: 'var(--primary-color)'
                                 }}
-                                className="w-full px-4 py-3 mb-4 border rounded-lg backdrop-blur-md focus:outline-none focus:ring-2 transition-all"
+                                className="w-full px-4 py-3 mb-4 transition-all border rounded-lg backdrop-blur-md focus:outline-none focus:ring-2"
                                 onFocus={(e) => e.currentTarget.style.boxShadow = `0 0 0 2px var(--primary-color)`}
                                 onBlur={(e) => e.currentTarget.style.boxShadow = 'none'}
                             />
@@ -438,7 +438,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                                         borderColor: 'var(--glass-border)',
                                         color: 'var(--button-text)'
                                     }}
-                                    className="flex-1 px-4 py-2 font-semibold transition-all rounded-lg border disabled:opacity-50 hover:opacity-90 hover:shadow-lg"
+                                    className="flex-1 px-4 py-2 font-semibold transition-all border rounded-lg disabled:opacity-50 hover:opacity-90 hover:shadow-lg"
                                 >
                                     Create
                                 </button>
@@ -450,7 +450,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                                         borderColor: 'var(--glass-border)',
                                         color: 'var(--text-color)'
                                     }}
-                                    className="flex-1 px-4 py-2 font-semibold transition-all rounded-lg border hover:opacity-75"
+                                    className="flex-1 px-4 py-2 font-semibold transition-all border rounded-lg hover:opacity-75"
                                 >
                                     Cancel
                                 </button>
@@ -472,7 +472,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                     >
                         <div className="flex items-center justify-between mb-4">
                             <h3 style={{ color: 'var(--text-color)' }} className="text-xl font-bold">Rename List</h3>
-                            <button onClick={() => setShowRenameModal(false)} style={{ color: 'var(--text-color)' }} className="opacity-50 hover:opacity-80 transition-opacity">
+                            <button onClick={() => setShowRenameModal(false)} style={{ color: 'var(--text-color)' }} className="transition-opacity opacity-50 hover:opacity-80">
                                 <X size={24} />
                             </button>
                         </div>
@@ -489,7 +489,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                                     color: 'var(--input-text)',
                                     caretColor: 'var(--primary-color)'
                                 }}
-                                className="w-full px-4 py-3 mb-4 border rounded-lg backdrop-blur-md focus:outline-none focus:ring-2 transition-all"
+                                className="w-full px-4 py-3 mb-4 transition-all border rounded-lg backdrop-blur-md focus:outline-none focus:ring-2"
                                 onFocus={(e) => e.currentTarget.style.boxShadow = `0 0 0 2px var(--primary-color)`}
                                 onBlur={(e) => e.currentTarget.style.boxShadow = 'none'}
                             />
@@ -502,7 +502,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                                         borderColor: 'var(--glass-border)',
                                         color: 'var(--button-text)'
                                     }}
-                                    className="flex-1 px-4 py-2 font-semibold transition-all rounded-lg border disabled:opacity-50 hover:opacity-90 hover:shadow-lg"
+                                    className="flex-1 px-4 py-2 font-semibold transition-all border rounded-lg disabled:opacity-50 hover:opacity-90 hover:shadow-lg"
                                 >
                                     Rename
                                 </button>
@@ -514,7 +514,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                                         borderColor: 'var(--glass-border)',
                                         color: 'var(--text-color)'
                                     }}
-                                    className="flex-1 px-4 py-2 font-semibold transition-all rounded-lg border hover:opacity-75"
+                                    className="flex-1 px-4 py-2 font-semibold transition-all border rounded-lg hover:opacity-75"
                                 >
                                     Cancel
                                 </button>
@@ -546,7 +546,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                                     borderColor: 'var(--glass-border)',
                                     color: 'var(--button-text)'
                                 }}
-                                className="flex-1 px-4 py-2 font-semibold transition-all rounded-lg border hover:opacity-90 hover:shadow-lg"
+                                className="flex-1 px-4 py-2 font-semibold transition-all border rounded-lg hover:opacity-90 hover:shadow-lg"
                             >
                                 Delete
                             </button>
@@ -557,7 +557,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                                     borderColor: 'var(--glass-border)',
                                     color: 'var(--text-color)'
                                 }}
-                                className="flex-1 px-4 py-2 font-semibold transition-all rounded-lg border hover:opacity-75"
+                                className="flex-1 px-4 py-2 font-semibold transition-all border rounded-lg hover:opacity-75"
                             >
                                 Cancel
                             </button>
@@ -578,7 +578,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                     >
                         <div className="flex items-center justify-between mb-4">
                             <h3 style={{ color: 'var(--text-color)' }} className="text-xl font-bold">Product Notes</h3>
-                            <button onClick={() => setShowNotesModal(false)} style={{ color: 'var(--text-color)' }} className="opacity-50 hover:opacity-80 transition-opacity">
+                            <button onClick={() => setShowNotesModal(false)} style={{ color: 'var(--text-color)' }} className="transition-opacity opacity-50 hover:opacity-80">
                                 <X size={24} />
                             </button>
                         </div>
@@ -595,7 +595,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                                     color: 'var(--input-text)',
                                     caretColor: 'var(--primary-color)'
                                 }}
-                                className="w-full px-4 py-3 mb-4 border rounded-lg resize-none backdrop-blur-md focus:outline-none focus:ring-2 transition-all"
+                                className="w-full px-4 py-3 mb-4 transition-all border rounded-lg resize-none backdrop-blur-md focus:outline-none focus:ring-2"
                                 onFocus={(e) => e.currentTarget.style.boxShadow = `0 0 0 2px var(--primary-color)`}
                                 onBlur={(e) => e.currentTarget.style.boxShadow = 'none'}
                             />
@@ -607,7 +607,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                                         borderColor: 'var(--glass-border)',
                                         color: 'var(--button-text)'
                                     }}
-                                    className="flex-1 px-4 py-2 font-semibold transition-all rounded-lg border hover:opacity-90 hover:shadow-lg"
+                                    className="flex-1 px-4 py-2 font-semibold transition-all border rounded-lg hover:opacity-90 hover:shadow-lg"
                                 >
                                     Save
                                 </button>
@@ -619,7 +619,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                                         borderColor: 'var(--glass-border)',
                                         color: 'var(--text-color)'
                                     }}
-                                    className="flex-1 px-4 py-2 font-semibold transition-all rounded-lg border hover:opacity-75"
+                                    className="flex-1 px-4 py-2 font-semibold transition-all border rounded-lg hover:opacity-75"
                                 >
                                     Cancel
                                 </button>

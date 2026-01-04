@@ -50,6 +50,7 @@ venv.bak/
 .env.*.local
 
 # Database files
+backend/yupoo.db
 *.db
 *.sqlite
 *.sqlite3

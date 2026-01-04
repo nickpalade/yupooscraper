@@ -357,7 +357,7 @@ const App: React.FC = () => {
         params.exclusive_type_search = exclusiveTypeSearch;
       }
       
-      const response = await axios.get<Product[]>(`/api/products`, { params });
+      const response = await axios.get<Product[]>(buildApiUrl('/api/products'), { params });
       setProducts(response.data);
       if (response.data.length === 0) {
         setSearchError('No products found with the selected tags');
@@ -429,7 +429,7 @@ const App: React.FC = () => {
     }
 
     try {
-      const response = await axios.get<Product[]>(`/api/products/all`);
+      const response = await axios.get<Product[]>(buildApiUrl('/api/products/all'));
       setProducts(response.data);
       
       // Scroll to results section (not on first visit)
@@ -465,7 +465,7 @@ const App: React.FC = () => {
     setClearDatabaseMessage(null);
 
     try {
-      const response = await axios.delete(`/api/database/clear`, {
+      const response = await axios.delete(buildApiUrl('/api/database/clear'), {
         headers: {
           'Authorization': `Bearer ${authToken}`
         }
