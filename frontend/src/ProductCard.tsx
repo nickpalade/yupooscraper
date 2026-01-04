@@ -5,7 +5,7 @@ import { useSettings } from './SettingsContext';
 import type { AppSettings } from './SettingsContext';
 import { Product, TagCategory, categorizeAndFormatTags } from './types';
 import SaveButton from './SaveButton';
-import { buildApiUrl } from './api-config';
+import { buildApiUrl, buildImageUrl } from './api-config';
 
 interface ProductCardProps {
     product: Product;
@@ -72,7 +72,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
 
 
     const handleImageClick = () => {
-        const imageSrc = product.image_path ? product.image_path : product.image_url;
+        const imageSrc = product.image_path ? buildImageUrl(product.image_path) : product.image_url;
         onImageClick(imageSrc, product.album_title, product.id);
     };
 
@@ -186,7 +186,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
                     </div>
                 )}
                 <img
-                    src={product.image_path ? product.image_path : product.image_url}
+                    src={product.image_path ? buildImageUrl(product.image_path) : product.image_url}
                     alt={product.album_title || "Product cover"}
                     className="object-cover w-full h-full transition-transform duration-300 cursor-pointer"
                     onClick={handleImageClick}

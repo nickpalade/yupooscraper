@@ -46,3 +46,23 @@ export const buildApiUrl = (endpoint: string): string => {
   console.log('[API Config] Built URL:', finalUrl, 'from endpoint:', endpoint);
   return finalUrl;
 };
+
+export const buildImageUrl = (imagePath: string): string => {
+  // If already a full URL, return as-is
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    return imagePath;
+  }
+  
+  // If it's a relative path starting with /api/images, we need to prepend the base URL in production
+  if (imagePath.startsWith('/api/images')) {
+    // In development, relative paths work via Vite proxy
+    // In production, we need the full backend URL
+    if (API_BASE_URL) {
+      return `${API_BASE_URL}${imagePath}`;
+    }
+    return imagePath; // Development - use relative path
+  }
+  
+  // Otherwise return as-is (could be a placeholder or external URL)
+  return imagePath;
+};

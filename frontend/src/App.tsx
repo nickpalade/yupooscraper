@@ -8,7 +8,7 @@ import MainContent from './MainContent';
 import LoginModal from './LoginModal';
 import MyLists from './MyLists';
 import { Product, TagCategory } from './types';
-import { buildApiUrl } from './api-config';
+import { buildApiUrl, buildImageUrl } from './api-config';
 
 
 
@@ -499,7 +499,7 @@ const App: React.FC = () => {
     setHighlightedProductId(null);
     const product = products.find(p => p.id === productId);
     if (product) {
-      const imageSrc = product.image_path ? product.image_path : product.image_url;
+      const imageSrc = product.image_path ? buildImageUrl(product.image_path) : product.image_url;
       setPreviewImage(imageSrc);
       setPreviewTitle(product.album_title);
       setPreviewProductId(productId);
