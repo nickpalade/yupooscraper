@@ -3,6 +3,7 @@ import { Plus, Trash2, Edit2, X, StickyNote, ExternalLink } from 'lucide-react';
 import axios from 'axios';
 import { Product } from './types';
 import ProductCard from './ProductCard';
+import { buildApiUrl } from './api-config';
 
 interface MyListsProps {
     authToken: string | null;
@@ -54,7 +55,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
     const loadLists = async () => {
         setLoading(true);
         try {
-            const response = await axios.get('/api/user/lists', {
+            const response = await axios.get(buildApiUrl('/api/user/lists'), {
                 headers: { 'Authorization': `Bearer ${authToken}` }
             });
             setLists(response.data.lists);
@@ -71,7 +72,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
     const loadListProducts = async (listId: number) => {
         setLoading(true);
         try {
-            const response = await axios.get(`/api/user/lists/${listId}/products`, {
+            const response = await axios.get(buildApiUrl(`/api/user/lists/${listId}/products`), {
                 headers: { 'Authorization': `Bearer ${authToken}` }
             });
             setProducts(response.data.products);
@@ -87,7 +88,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
         if (!newListName.trim()) return;
 
         try {
-            const response = await axios.post('/api/user/lists', {
+            const response = await axios.post(buildApiUrl('/api/user/lists'), {
                 list_name: newListName.trim()
             }, {
                 headers: { 'Authorization': `Bearer ${authToken}` }

@@ -8,6 +8,7 @@ import MainContent from './MainContent';
 import LoginModal from './LoginModal';
 import MyLists from './MyLists';
 import { Product, TagCategory } from './types';
+import { buildApiUrl } from './api-config';
 
 
 
@@ -140,7 +141,7 @@ const App: React.FC = () => {
 
   const verifyToken = async (token: string, savedUsername: string, savedIsAdmin: boolean) => {
     try {
-      const response = await axios.get('/api/auth/verify', {
+      const response = await axios.get(buildApiUrl('/api/auth/verify'), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -205,7 +206,7 @@ const App: React.FC = () => {
         setSearchLoading(true);
         try {
           if (showViewAll) {
-            const response = await axios.get<Product[]>(`/api/products/all`);
+            const response = await axios.get<Product[]>(buildApiUrl('/api/products/all'));
             setProducts(response.data);
           } else if (selectedTags.size > 0) {
             const tagsArray = Array.from(selectedTags).join(',');
@@ -215,7 +216,7 @@ const App: React.FC = () => {
               params.sort_by_colors = sortByColor.join(',');
             }
             
-            const response = await axios.get<Product[]>(`/api/products`, { params });
+            const response = await axios.get<Product[]>(buildApiUrl('/api/products'), { params });
             setProducts(response.data);
             if (response.data.length === 0) {
               setSearchError('No products found with the restored tags');
@@ -243,7 +244,7 @@ const App: React.FC = () => {
   const fetchTags = async () => {
     setTagsLoading(true);
     try {
-      const response = await axios.get<{ tags: string[] }>(`/api/tags`);
+      const response = await axios.get<{ tags: string[] }>(buildApiUrl('/api/tags'));
       setAllTags(response.data.tags);
     } catch (err) {
       console.error('Failed to load tags:', err);
@@ -277,7 +278,7 @@ const App: React.FC = () => {
         return;
       }
 
-      const response = await fetch(`/api/scrape`, {
+      const response = await fetch(buildApiUrl('/api/scrape'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

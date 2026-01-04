@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Loader, Download, AlertCircle, CheckCircle, FileText, RotateCw, Image, Target, AlertTriangle, MapPin, Palette, Trash2 } from 'lucide-react';
+import { buildApiUrl } from './api-config';
 
 interface ScrapeProgress {
     type: 'info' | 'progress' | 'success' | 'error' | 'complete' |
@@ -71,7 +72,7 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
     setAdjustingColorsLoading(true);
     setAdjustColorsMessage(null);
     try {
-      const response = await fetch('/api/colors/adjust', {
+      const response = await fetch(buildApiUrl('/api/colors/adjust'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -95,7 +96,7 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
     setRetaggingLoading(true);
     setRetaggingMessage(null);
     try {
-      const response = await fetch('/api/colors/retag', {
+      const response = await fetch(buildApiUrl('/api/colors/retag'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

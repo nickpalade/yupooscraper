@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import axios from 'axios';
+import { buildApiUrl } from './api-config';
 import { Product } from './types';
 import SaveButton from './SaveButton';
 
@@ -327,7 +328,7 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
     const mobileDevice = isMobile();
 
     try {
-      const response = await axios.get<{ external_link: string }>(`/api/external-link?url=${encodeURIComponent(currentProduct.album_url)}`);
+      const response = await axios.get<{ external_link: string }>(buildApiUrl(`/api/external-link?url=${encodeURIComponent(currentProduct.album_url)}`));
       const externalLink = response.data.external_link;
       
       if (externalLink) {

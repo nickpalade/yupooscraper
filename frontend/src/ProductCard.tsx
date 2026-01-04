@@ -5,6 +5,7 @@ import { useSettings } from './SettingsContext';
 import type { AppSettings } from './SettingsContext';
 import { Product, TagCategory, categorizeAndFormatTags } from './types';
 import SaveButton from './SaveButton';
+import { buildApiUrl } from './api-config';
 
 interface ProductCardProps {
     product: Product;
@@ -109,7 +110,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
         const mobileDevice = isMobile();
 
         try {
-            const response = await axios.get<{ external_link: string }>(`/api/external-link?url=${encodeURIComponent(product.album_url)}`);
+            const response = await axios.get<{ external_link: string }>(buildApiUrl(`/api/external-link?url=${encodeURIComponent(product.album_url)}`));
             const externalLink = response.data.external_link;
             
             if (externalLink) {

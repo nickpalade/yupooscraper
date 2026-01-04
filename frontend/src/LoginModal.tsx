@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { LogIn, X, Loader, Lock, User, Mail } from 'lucide-react';
+import { buildApiUrl } from './api-config';
 
 interface LoginModalProps {
     show: boolean;
@@ -43,7 +44,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ show, onClose, onLoginSuccess }
         setLoading(true);
 
         try {
-            const endpoint = isSignup ? '/api/auth/register' : '/api/auth/login';
+            const endpoint = isSignup ? buildApiUrl('/api/auth/register') : buildApiUrl('/api/auth/login');
             const body = isSignup 
                 ? JSON.stringify({ username, password, email: email || undefined })
                 : JSON.stringify({ username, password });

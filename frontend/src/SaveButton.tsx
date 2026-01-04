@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bookmark, BookMarked, Plus } from 'lucide-react';
 import axios from 'axios';
+import { buildApiUrl } from './api-config';
 
 interface SaveButtonProps {
     productId: number;
@@ -65,7 +66,7 @@ const SaveButton: React.FC<SaveButtonProps> = ({
 
     const loadUserLists = async () => {
         try {
-            const response = await axios.get('/api/user/lists', {
+            const response = await axios.get(buildApiUrl('/api/user/lists'), {
                 headers: { 'Authorization': `Bearer ${authToken}` }
             });
             setLists(response.data.lists);
@@ -76,7 +77,7 @@ const SaveButton: React.FC<SaveButtonProps> = ({
 
     const checkSavedStatus = async () => {
         try {
-            const response = await axios.get(`/api/user/products/${productId}/saved-status`, {
+            const response = await axios.get(buildApiUrl(`/api/user/products/${productId}/saved-status`), {
                 headers: { 'Authorization': `Bearer ${authToken}` }
             });
             setSavedLists(response.data.lists);
@@ -102,13 +103,13 @@ const SaveButton: React.FC<SaveButtonProps> = ({
             
             if (isSaved) {
                 // Unsave
-                await axios.delete(`/api/user/lists/${listId}/products/${productId}`, {
+                await axios.delete(buildApiUrl(`/api/user/lists/${listId}/products/${productId}`), {
                     headers: { 'Authorization': `Bearer ${authToken}` }
                 });
                 setSavedLists(prev => prev.filter(l => l !== listName));
             } else {
                 // Save
-                await axios.post('/api/user/saved-products', {
+                await axios.post(buildApiUrl('/api/user/saved-products'), {
                     list_id: listId,
                     product_id: productId,
                     notes: null
@@ -133,7 +134,7 @@ const SaveButton: React.FC<SaveButtonProps> = ({
 
         setLoading(true);
         try {
-            const response = await axios.post('/api/user/lists', {
+            const response = await axios.post(buildApiUrl('/api/user/lists'), {
                 list_name: newListName.trim()
             }, {
                 headers: { 'Authorization': `Bearer ${authToken}` }
