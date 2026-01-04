@@ -154,6 +154,50 @@ def init_db(db_path: str = DB_NAME) -> None:
     conn.commit()
     conn.close()
     debug_print("Database initialization complete")
+    
+    # Create default admin user if it doesn't exist
+    _create_default_admin(db_path)
+
+
+def _create_default_admin(db_path: str = DB_NAME) -> None:
+    """Create a default admin user if one doesn't exist.
+    
+    This is called automatically during database initialization.
+    Default credentials are username: 'admin', password: 'password123'
+    
+    Args:
+        db_path: Path to the SQLite database file.
+    """
+    try:
+        # Import auth here to avoid circular imports
+        from backend import auth
+        
+        username = "admin"
+        password = "password123"
+        
+        # Check if admin user already exists
+        existing_user = get_user_by_username(username, db_path)
+        if existing_user:
+            debug_print(f"Admin user '{username}' already exists. Skipping creation.")
+            return
+        
+        # Hash the password
+        hashed_password = auth.get_password_hash(password)
+        
+        # Create the admin user
+        user_id = create_user(
+            username=username,
+            hashed_password=hashed_password,
+            email=None,
+            is_admin=True,
+            db_path=db_path
+        )
+        debug_print(f"Successfully created default admin user with ID: {user_id}")
+        debug_print(f"Default admin credentials - Username: {username}, Password: {password}")
+        
+    except Exception as e:
+        debug_print(f"Error creating default admin user: {e}")
+        # Don't raise - this should not block database initialization
 
 
 def insert_product(image_url: str, tags: Iterable[str], album_url: str, image_path: Optional[str] = None, album_title: Optional[str] = None, colors_data: Optional[dict] = None, db_path: str = DB_NAME) -> None:
