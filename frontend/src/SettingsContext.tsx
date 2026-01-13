@@ -111,6 +111,14 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Effect to apply theme to HTML element
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
+    
+    // Update meta theme-color for Safari iOS - use setTimeout to ensure background renders first
+    setTimeout(() => {
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+      if (metaThemeColor) {
+        metaThemeColor.setAttribute('content', darkMode ? '#1a202c' : '#f0f2f5');
+      }
+    }, 50);
   }, [darkMode]);
 
 
@@ -153,6 +161,16 @@ interface SettingsModalProps {
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const { settings, setSettings, darkMode, updateDarkMode } = useSettings();
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsVisible(true);
+    } else {
+      const timer = setTimeout(() => setIsVisible(false), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
 
   const handleTagToggle = (setting: keyof AppSettings['tags']) => {
     setSettings(prevSettings => ({
@@ -170,32 +188,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     showCompany: 'Show Brands',
   };
 
-  if (!isOpen) return null;
+  if (!isOpen && !isVisible) return null;
 
   return (
     <div 
       className="fixed inset-0 z-50 flex items-center justify-center" 
       style={{
         backgroundColor: isOpen 
-          ? (darkMode ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.2)')
-          : (darkMode ? 'rgba(0, 0, 0, 0)' : 'rgba(0, 0, 0, 0)'),
-        backdropFilter: isOpen ? 'blur(8px)' : 'blur(0px)',
+          ? (darkMode ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.1)')
+          : 'rgba(0, 0, 0, 0)',
+        backdropFilter: 'blur(8px)',
         opacity: isOpen ? 1 : 0,
         pointerEvents: isOpen ? 'auto' : 'none',
-        transition: 'all 300ms ease-in-out',
+        transition: 'opacity 300ms ease-in-out, background-color 300ms ease-in-out',
       }}
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-sm p-6 overflow-y-auto rounded-2xl max-h-[90vh] transition-all duration-300" 
+        className="w-full max-w-sm p-6 overflow-y-auto rounded-2xl max-h-[90vh]" 
         onClick={(e) => e.stopPropagation()}
         style={{
-          backgroundColor: darkMode ? 'var(--glass-bg)' : 'rgba(255, 255, 255, 0.7)',
+          backgroundColor: 'var(--glass-bg)',
           border: '1px solid var(--glass-border)',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), inset 0 1px 1px 0 rgba(255, 255, 255, 0.2)',
           backdropFilter: 'blur(25px)',
+          animation: isOpen ? 'modalSlideIn 0.3s ease-out' : 'none',
           transform: isOpen ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(-20px)',
           opacity: isOpen ? 1 : 0,
+          transition: 'all 300ms ease-in-out',
         }}
       >
         <div className="flex items-center justify-between mb-6">
@@ -236,7 +256,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   <div 
                     className="w-12 h-7 rounded-full peer transition-all duration-300 after:content-[''] after:absolute after:top-1 after:left-1 after:rounded-full after:h-5 after:w-5 after:transition-all after:duration-300"
                     style={{
-                      backgroundColor: settings.tags[key] ? 'var(--primary-color)' : 'rgba(255, 255, 255, 0.2)',
+                      backgroundColor: settings.tags[key] ? 'var(--primary-color)' : (darkMode ? 'rgba(255, 255, 255, 0.2)' : 'rgba(128, 128, 128, 0.5)'),
                       boxShadow: settings.tags[key] ? '0 0 12px var(--primary-color)' : 'none',
                     }}
                   >
@@ -271,7 +291,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               <div 
                 className="w-12 h-7 rounded-full peer transition-all duration-300 after:content-[''] after:absolute after:top-1 after:left-1 after:rounded-full after:h-5 after:w-5 after:transition-all after:duration-300"
                 style={{
-                  backgroundColor: darkMode ? 'var(--primary-color)' : 'rgba(255, 255, 255, 0.2)',
+                  backgroundColor: darkMode ? 'var(--primary-color)' : (darkMode ? 'rgba(255, 255, 255, 0.2)' : 'rgba(128, 128, 128, 0.5)'),
                   boxShadow: darkMode ? '0 0 12px var(--primary-color)' : 'none',
                 }}
               >

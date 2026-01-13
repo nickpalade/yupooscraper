@@ -164,7 +164,7 @@ const SaveButton: React.FC<SaveButtonProps> = ({
             <button
                 onClick={handleButtonClick}
                 onMouseDown={(e) => e.stopPropagation()}
-                className={`${compact ? 'p-2' : 'px-4 py-2'} rounded-lg transition-all backdrop-blur-md border`}
+                className={`flex items-center justify-center transition-all border rounded-xl backdrop-blur-md ${compact ? 'w-10 h-10' : 'w-14 h-14'}`}
                 style={{
                     backgroundColor: isSaved ? 'var(--primary-color)' : 'rgba(255, 255, 255, 0.25)',
                     borderColor: 'var(--glass-border)',
@@ -174,9 +174,9 @@ const SaveButton: React.FC<SaveButtonProps> = ({
                 title={isAuthenticated ? (isSaved ? 'Saved' : 'Save to list') : 'Login to save'}
             >
                 {isSaved ? (
-                    <BookMarked size={compact ? 18 : 20} />
+                    <BookMarked size={compact ? 18 : 22} />
                 ) : (
-                    <Bookmark size={compact ? 18 : 20} />
+                    <Bookmark size={compact ? 18 : 22} />
                 )}
             </button>
 

@@ -95,25 +95,37 @@ def extract_brands_from_text(text: str) -> List[str]:
     if not db:
         return []
     
+    import re
+    
     detected_brands = set()
     text_upper = text.upper()
     
+    # Sort by length (longest first) to match longer brands before shorter ones
+    sorted_brands = sorted(db.keys(), key=len, reverse=True)
+    
+    # Keep track of matched positions to avoid overlapping matches
+    matched_positions = set()
+    
     # Check for each known brand in the text
-    for obfuscated_name in db.keys():
+    for obfuscated_name in sorted_brands:
         obfuscated_upper = obfuscated_name.upper()
+        translated = db[obfuscated_name]
         
-        # Check for exact substring match
-        if obfuscated_upper in text_upper:
-            translated = db[obfuscated_name]
-            if translated:  # Only add if there's a translation
+        if not translated:  # Skip if no translation
+            continue
+        
+        # Use word boundaries for matching to avoid matching 'LEE' in 'SLEEVED' or 'ON' in 'LONG'
+        # But allow star emojis to be part of the pattern
+        pattern = r'\b' + re.escape(obfuscated_upper) + r'\b'
+        
+        for match in re.finditer(pattern, text_upper):
+            start, end = match.span()
+            # Check if this position overlaps with already matched positions
+            overlaps = any(s < end and e > start for s, e in matched_positions)
+            if not overlaps:
                 detected_brands.add(translated)
-        
-        # Check for fuzzy match (for partial matches)
-        else:
-            similarity = SequenceMatcher(None, text_upper, obfuscated_upper).ratio()
-            if similarity > 0.7:  # 70% similarity threshold
-                translated = db[obfuscated_name]
-                if translated:
-                    detected_brands.add(translated)
+                matched_positions.add((start, end))
+                debug_print(f"  Found brand '{obfuscated_name}' -> '{translated}'")
+                break  # Only match each brand pattern once
     
     return sorted(list(detected_brands))

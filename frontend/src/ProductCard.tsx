@@ -67,13 +67,48 @@ const ProductCard: React.FC<ProductCardProps> = ({
     const [isFetchingLink, setIsFetchingLink] = useState(false);
     const [pendingSimilarSearch, setPendingSimilarSearch] = useState<boolean | null>(null);
     const similarSearchTimeoutRef = React.useRef<number | null>(null);
+    const [isMobileDevice, setIsMobileDevice] = useState(isMobile());
     const { settings } = useSettings();
     const tagSettings = settings.tags;
+
+    // Detect mobile on mount and on window resize
+    React.useEffect(() => {
+        const handleResize = () => {
+            setIsMobileDevice(isMobile());
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
 
     const handleImageClick = () => {
         const imageSrc = product.image_path ? buildImageUrl(product.image_path) : product.image_url;
         onImageClick(imageSrc, product.album_title, product.id);
+    };
+
+    const touchStartRef = React.useRef({ x: 0, y: 0, time: 0 });
+
+    const handleImageTouchStart = (e: React.TouchEvent) => {
+        // Record touch start position and time
+        touchStartRef.current = {
+            x: e.touches[0].clientX,
+            y: e.touches[0].clientY,
+            time: Date.now(),
+        };
+    };
+
+    const handleImageTouchEnd = (e: React.TouchEvent) => {
+        // Calculate distance and time of touch
+        const deltaX = Math.abs(e.changedTouches[0].clientX - touchStartRef.current.x);
+        const deltaY = Math.abs(e.changedTouches[0].clientY - touchStartRef.current.y);
+        const deltaTime = Date.now() - touchStartRef.current.time;
+
+        // Only trigger preview if it's a quick tap (not a scroll)
+        // Threshold: less than 10px movement and less than 300ms duration
+        if (deltaX < 10 && deltaY < 10 && deltaTime < 300) {
+            const imageSrc = product.image_path ? buildImageUrl(product.image_path) : product.image_url;
+            onImageClick(imageSrc, product.album_title, product.id);
+        }
     };
 
     const handleSimilarSearchClick = (sameBrand: boolean) => {
@@ -166,15 +201,15 @@ const ProductCard: React.FC<ProductCardProps> = ({
                 animationDelay: shouldAnimate && !isScrolling && !shouldShowInstantly ? `${index * 50}ms` : '0ms',
                 animationFillMode: 'forwards',
                 opacity: shouldShowInstantly || isScrolling ? 1 : 0,
-                overflow: 'visible',
+                overflow: 'hidden',
             }}
         >
             <div
                 className="relative w-full aspect-square group"
-                style={{ backgroundColor: 'var(--card-bg)', overflow: 'visible' }}
+                style={{ backgroundColor: 'var(--card-bg)', overflow: 'hidden', touchAction: 'manipulation' }}
             >
-                {showSaveButton && (
-                    <div className="absolute z-20 transition-opacity duration-200 opacity-0 top-2 right-2 group-hover:opacity-100" onMouseLeave={() => window.dispatchEvent(new Event('saveButtonHoverEnd'))}>
+                {showSaveButton && !isMobileDevice && (
+                    <div className="absolute z-20 transition-opacity duration-200 opacity-0 top-2 right-2 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto" onMouseLeave={() => window.dispatchEvent(new Event('saveButtonHoverEnd'))}>
                         <SaveButton
                             productId={product.id}
                             isAuthenticated={isAuthenticated}
@@ -190,6 +225,8 @@ const ProductCard: React.FC<ProductCardProps> = ({
                     alt={product.album_title || "Product cover"}
                     className="object-cover w-full h-full transition-transform duration-300 cursor-pointer"
                     onClick={handleImageClick}
+                    onTouchStart={handleImageTouchStart}
+                    onTouchEnd={handleImageTouchEnd}
                     onLoad={() => onImageLoaded(index)}
                     onError={(e) => {
                         e.currentTarget.src = 'https://via.placeholder.com/400?text=Image+Not+Found';
@@ -249,7 +286,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
                                             <p className={`mb-1 font-bold uppercase ${labelSizeClass}`} style={{ color: 'var(--text-color)' }}>
                                                 {categoryLabels[category]}:
                                             </p>
-                                            <div className="flex flex-wrap gap-1">
+                                            <div className="flex flex-wrap gap-1 overflow-hidden">
                                                 {categories[category].map((tag, idx) => {
                                                     let percentage = null;
                                                     if (category === 'color' && product.colors) {
@@ -265,13 +302,14 @@ const ProductCard: React.FC<ProductCardProps> = ({
                                                     return (
                                                         <span
                                                             key={idx}
-                                                            className={`inline-block rounded border ${tagSizeClass} whitespace-nowrap`}
+                                                            className={`inline-block rounded border ${tagSizeClass} whitespace-nowrap truncate`}
                                                             style={{
                                                                 backgroundColor: `var(--tag-${category}-bg)`,
                                                                 color: `var(--tag-${category}-text)`,
                                                                 borderColor: `var(--tag-${category}-bg)`, // Border color same as background for a more unified look
+                                                                maxWidth: '100%',
                                                             }}
-                                                            title={percentage !== null ? `${percentage.toFixed(1)}% of image` : ''}
+                                                            title={percentage !== null ? `${tag} - ${percentage.toFixed(1)}% of image` : tag}
                                                         >
                                                             {tag}
                                                             {percentage !== null && <span className="ml-1 font-semibold">({percentage.toFixed(0)}%)</span>}

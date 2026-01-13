@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Home, Zap, Settings as SettingsIcon, LogIn, LogOut, User as UserIcon, Bookmark } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface NavigationBarProps {
-  currentTab: 'home' | 'scraper' | 'lists';
-  setCurrentTab: (tab: 'home' | 'scraper' | 'lists') => void;
   onSettingsClick: () => void;
   isAuthenticated: boolean;
   username?: string;
@@ -13,8 +12,6 @@ interface NavigationBarProps {
 }
 
 const NavigationBar: React.FC<NavigationBarProps> = ({ 
-  currentTab, 
-  setCurrentTab, 
   onSettingsClick,
   isAuthenticated,
   username,
@@ -22,7 +19,15 @@ const NavigationBar: React.FC<NavigationBarProps> = ({
   onLoginClick,
   onLogoutClick
 }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [isScrolled, setIsScrolled] = useState(false);
+  
+  // Determine current tab from route
+  const currentTab = location.pathname === '/scraper' ? 'scraper' 
+    : location.pathname === '/lists' ? 'lists'
+    : location.pathname.startsWith('/similar/') ? 'home'
+    : 'home';
 
   useEffect(() => {
     const handleScroll = () => {
@@ -48,15 +53,19 @@ const NavigationBar: React.FC<NavigationBarProps> = ({
 
   const wrapperClasses = `
     fixed inset-x-0 z-50 glass-container
-    ${isScrolled ? 'rounded-none' : 'rounded-xl'}
+    ${isScrolled ? 'rounded-none border-transparent' : 'rounded-xl'}
   `;
 
   const wrapperStyles: React.CSSProperties = {
-    top: isScrolled ? 0 : 8,
-    marginLeft: isScrolled ? 0 : 16,
-    marginRight: isScrolled ? 0 : 16,
-    paddingTop: isScrolled ? 8 : 16,
+    top: isScrolled ? -4 : 8,
+    left: isScrolled ? -4 : 16,
+    right: isScrolled ? -4 : 16,
+    marginLeft: isScrolled ? 0 : 0,
+    marginRight: isScrolled ? 0 : 0,
+    paddingTop: isScrolled ? 12 : 16,
     paddingBottom: isScrolled ? 8 : 16,
+    paddingLeft: isScrolled ? 20 : 16,
+    paddingRight: isScrolled ? 20 : 16,
     transition: 'all 300ms ease-in-out',
   };
 
@@ -70,7 +79,7 @@ const NavigationBar: React.FC<NavigationBarProps> = ({
 
         <div className="flex gap-4">
           <button
-            onClick={() => setCurrentTab('home')}
+            onClick={() => navigate('/')}
             className={`${getTabClass('home')}`}
             style={{
               backgroundColor: currentTab === 'home' ? 'var(--primary-color)' : 'var(--glass-bg)',
@@ -84,7 +93,7 @@ const NavigationBar: React.FC<NavigationBarProps> = ({
           </button>
           {isAuthenticated && (
             <button
-              onClick={() => setCurrentTab('lists')}
+              onClick={() => navigate('/lists')}
               className={`${getTabClass('lists')}`}
               style={{
                 backgroundColor: currentTab === 'lists' ? 'var(--primary-color)' : 'var(--glass-bg)',
@@ -99,7 +108,7 @@ const NavigationBar: React.FC<NavigationBarProps> = ({
           )}
           {isAdmin && (
             <button
-              onClick={() => setCurrentTab('scraper')}
+              onClick={() => navigate('/scraper')}
               className={`${getTabClass('scraper')}`}
               style={{
                 backgroundColor: currentTab === 'scraper' ? 'var(--primary-color)' : 'var(--glass-bg)',

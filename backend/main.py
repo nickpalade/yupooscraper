@@ -711,6 +711,49 @@ def list_all_products():
     ) for id_, image_url, image_path, album_title, tags_, album_url, colors_data in rows]
 
 
+@app.get("/api/products/similar-by-color/{product_id}", response_model=List[ProductResponse], summary="Find similar products by color")
+def find_similar_by_color(product_id: int, limit: int = Query(default=50, ge=1, le=200), same_brand: bool = Query(default=False)):
+    """Find products with similar colors to the specified product.
+    
+    This endpoint uses percentage-based color similarity calculation
+    and filters results to only include products of the same clothing type.
+    Optionally filters by same brand.
+    Results are sorted from most similar to least similar.
+    
+    Args:
+        product_id: The ID of the product to find similar items for
+        limit: Maximum number of results to return (default 50, max 200)
+        same_brand: If True, only return products from the same brand
+        
+    Returns:
+        A list of similar products sorted by color similarity
+    """
+    debug_print(f"=== FIND SIMILAR BY COLOR REQUEST ===")
+    debug_print(f"Product ID: {product_id}")
+    debug_print(f"Limit: {limit}")
+    debug_print(f"Same Brand: {same_brand}")
+    
+    rows = database.find_similar_products_by_color(product_id, limit, same_brand)
+    
+    if not rows:
+        debug_print("No similar products found")
+        return []
+    
+    debug_print(f"Found {len(rows)} similar products")
+    
+    # Convert to ProductResponse objects (excluding similarity score from response)
+    return [ProductResponse(
+        id=id_,
+        image_url=image_url,
+        image_path=image_path,
+        album_title=album_title,
+        translated_title=translator.translate_name(album_title),
+        tags=tags_,
+        album_url=album_url,
+        colors=colors_data
+    ) for id_, image_url, image_path, album_title, tags_, album_url, colors_data, similarity_score in rows]
+
+
 @app.get("/", summary="Service root")
 def root():
     """Root endpoint that provides a friendly greeting and hints about using the API."""
@@ -720,6 +763,7 @@ def root():
             "POST /api/scrape": "Scrape a Yupoo site and index products.",
             "GET /api/products": "Search for products by tags.",
             "GET /api/products/all": "List all stored products.",
+            "GET /api/products/similar-by-color/{product_id}": "Find similar products by color.",
             "DELETE /api/database/clear": "Clear all products from database (for testing).",
         },
     }
@@ -743,6 +787,64 @@ def clear_database_endpoint(current_user: dict = Depends(auth.get_current_admin)
         "message": f"Database cleared. {deleted} products deleted.",
         "deleted_count": deleted
     }
+
+
+@app.delete("/api/products/clean-untagged", summary="Remove products without company or type tags")
+def clean_untagged_products(current_user: dict = Depends(auth.get_current_admin)):
+    """Remove products that don't have any company tags or type tags.
+
+    This endpoint deletes products that lack both company (brand) tags and
+    clothing type tags, helping to clean up the database of improperly
+    tagged items. Requires admin authentication.
+
+    Returns:
+        A dict with the number of products deleted.
+    """
+    debug_print(f"=== CLEAN UNTAGGED PRODUCTS REQUEST by {current_user['username']} ===")
+    
+    try:
+        conn = database.sqlite3.connect(database.DB_NAME)
+        cursor = conn.cursor()
+        
+        # Find products that don't have any company_ or type_ tags
+        cursor.execute("""
+            SELECT id, tags_json FROM products
+        """)
+        
+        products_to_delete = []
+        for row in cursor.fetchall():
+            product_id = row[0]
+            tags_json = row[1]
+            tags = json.loads(tags_json) if tags_json else []
+            
+            # Check if product has at least one company tag or one type tag
+            has_company_tag = any(tag.startswith('company_') for tag in tags)
+            has_type_tag = any(tag.startswith('type_') for tag in tags)
+            
+            # If it has neither, mark for deletion
+            if not has_company_tag and not has_type_tag:
+                products_to_delete.append(product_id)
+        
+        # Delete the products
+        deleted_count = 0
+        for product_id in products_to_delete:
+            cursor.execute("DELETE FROM products WHERE id = ?", (product_id,))
+            deleted_count += 1
+        
+        conn.commit()
+        conn.close()
+        
+        debug_print(f"Deleted {deleted_count} products without company or type tags")
+        
+        return {
+            "status": "success",
+            "message": f"Removed {deleted_count} products without company or type tags",
+            "deleted": deleted_count
+        }
+    
+    except Exception as e:
+        debug_print(f"Error cleaning untagged products: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # TEMPORARY: Run grey percentage adjustment on startup for testing
 # debug_print("--- TEMPORARY: Running grey percentage adjustment on startup ---")

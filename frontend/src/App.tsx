@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
+import { useNavigate, useLocation, Routes, Route, useParams } from 'react-router-dom';
 import ImagePreview from './ImagePreview';
 import NavigationBar from './NavigationBar';
 import { useSettings, SettingsModal } from './SettingsContext';
@@ -7,8 +8,11 @@ import ScraperGUI from './ScraperGUI';
 import MainContent from './MainContent';
 import LoginModal from './LoginModal';
 import MyLists from './MyLists';
+import ConfirmDialog from './ConfirmDialog';
+import SimilarSearchPage from './SimilarSearchPage';
 import { Product, TagCategory } from './types';
 import { buildApiUrl, buildImageUrl } from './api-config';
+import { useURLState } from './useURLState';
 
 
 
@@ -55,12 +59,100 @@ const valueToExponentialSlider = (value: number): number => {
   return Math.max(0, Math.min(100, sliderValue));
 };
 
+// Component to handle /preview=:productId routes - loads product and redirects to home
+interface PreviewRedirectProps {
+  products: Product[];
+  itemsPerPage: number;
+  setCurrentPage: (page: number) => void;
+  setPreviewImage: (image: string | null) => void;
+  setPreviewTitle: (title: string | null) => void;
+  setPreviewProductId: (id: number | undefined) => void;
+  setPreviewContext: (context: 'home' | 'lists') => void;
+  navigate: (path: string) => void;
+}
+
+const PreviewRedirect: React.FC<PreviewRedirectProps> = ({
+  products,
+  itemsPerPage,
+  setCurrentPage,
+  setPreviewImage,
+  setPreviewTitle,
+  setPreviewProductId,
+  setPreviewContext,
+  navigate
+}) => {
+  const { productId } = useParams<{ productId: string }>();
+  
+  useEffect(() => {
+    if (!productId) return;
+    if (products.length === 0) return; // Wait for products to load
+    
+    const id = parseInt(productId, 10);
+    const productIndex = products.findIndex(p => p.id === id);
+    
+    if (productIndex !== -1) {
+      const product = products[productIndex];
+      const page = Math.floor(productIndex / itemsPerPage) + 1;
+      
+      // Set preview state before navigating
+      const imageSrc = product.image_path ? buildImageUrl(product.image_path) : product.image_url;
+      setPreviewImage(imageSrc);
+      setPreviewTitle(product.album_title);
+      setPreviewProductId(id);
+      setPreviewContext('home');
+      setCurrentPage(page);
+      
+      // Update localStorage
+      localStorage.setItem('yupooScraper_currentPage', page.toString());
+      
+      // Force navigation using window.location to ensure proper URL format
+      const params = new URLSearchParams();
+      if (page > 1) params.set('page', page.toString());
+      params.set('preview', productId);
+      const queryString = params.toString();
+      window.location.replace(`/?${queryString}`);
+    } else if (products.length > 0) {
+      // Product not found and products have loaded, just go home
+      window.location.replace('/');
+    }
+  }, [productId, products, itemsPerPage, setCurrentPage, setPreviewImage, setPreviewTitle, setPreviewProductId, setPreviewContext, navigate]);
+  
+  return null; // This component just handles the redirect
+};
+
 
 const App: React.FC = () => {
   const { settings } = useSettings();
-  const [currentTab, setCurrentTab] = useState<'home' | 'scraper' | 'lists'>('home');
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showLoginModal, setShowLoginModal] = useState(false);
+  const { urlState, updateURLState: originalUpdateURLState } = useURLState();
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Wrap updateURLState to prevent it from being called on similar search route
+  // EXCEPT for preview updates which should be allowed
+  const updateURLState = useCallback((updates: Parameters<typeof originalUpdateURLState>[0]) => {
+    if (!location.pathname.startsWith('/similar/')) {
+      originalUpdateURLState(updates);
+    } else {
+      // On similar routes, only allow preview updates
+      if (updates.preview !== undefined) {
+        // Manually update search params while preserving the current path
+        const params = new URLSearchParams(location.search);
+        if (updates.preview === null) {
+          params.delete('preview');
+        } else {
+          params.set('preview', updates.preview);
+        }
+        const queryString = params.toString();
+        const newUrl = queryString ? `${location.pathname}?${queryString}` : location.pathname;
+        navigate(newUrl, { replace: true });
+      }
+    }
+  }, [location.pathname, location.search, originalUpdateURLState, navigate]);
+  
+  const [showSettingsModal, setShowSettingsModal] = useState(urlState.showSettings);
+  const [showLoginModal, setShowLoginModal] = useState(urlState.showLogin || urlState.showSignup);
+  const [isSignupMode, setIsSignupMode] = useState(urlState.showSignup);
+  
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [username, setUsername] = useState<string>('');
@@ -84,20 +176,72 @@ const App: React.FC = () => {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [totalProductsCount, setTotalProductsCount] = useState<number>(0);
   const [sortByColor, setSortByColor] = useState<string[]>([]);  // Color(s) to sort by
   const [allTags, setAllTags] = useState<string[]>([]);
   const [tagsLoading, setTagsLoading] = useState(true); // Re-added tagsLoading state
   const [exclusiveTypeSearch, setExclusiveTypeSearch] = useState<boolean>(false);
 
+  // Stack-based navigation history for nested similar searches with localStorage persistence
+  const [searchStateStack, setSearchStateStack] = useState<Array<{
+    type: 'main' | 'similar';
+    products: Product[];
+    selectedTags: Set<string>;
+    showViewAll: boolean;
+    currentPage: number;
+    sortByColor: string[];
+    productId: number;
+    similarProductId?: number;
+    sameBrand?: boolean;
+  }>>(() => {
+    // Restore stack from localStorage on mount (without products - they'll be refetched)
+    const savedStack = localStorage.getItem('yupooScraper_navigationStack');
+    if (savedStack) {
+      try {
+        const parsed = JSON.parse(savedStack);
+        // Convert selectedTags arrays back to Sets and add empty products array
+        return parsed.map((state: any) => ({
+          ...state,
+          selectedTags: new Set(state.selectedTags),
+          products: [] // Products will be refetched when navigating back
+        }));
+      } catch (e) {
+        console.error('Failed to restore navigation stack:', e);
+        localStorage.removeItem('yupooScraper_navigationStack');
+        return [];
+      }
+    }
+    return [];
+  });
+  const [isInSimilarSearchMode, setIsInSimilarSearchMode] = useState(false);
+  
+  // Flag to track if we initiated the navigation (vs user pasting URL)
+  const navigationInitiatedByUs = useRef(false);
+  
+  // Flag to track if we've processed the initial preview from a shared link
+  const initialPreviewProcessed = useRef(false);
+
   // --- State with localStorage Persistence ---
   const [showViewAll, setShowViewAll] = useState(() => localStorage.getItem('yupooScraper_showViewAll') === 'true');
   
+  // Initialize selectedTags from URL first, then fall back to localStorage
   const [selectedTags, setSelectedTags] = useState(() => {
+    if (urlState.tags.length > 0) {
+      return new Set(urlState.tags);
+    }
     const saved = localStorage.getItem('yupooScraper_selectedTags');
     return saved ? new Set(JSON.parse(saved)) : new Set<string>();
   });
   
+  // Initialize currentPage from URL first, then fall back to localStorage
+  // Don't use localStorage if we're on a preview route (it will be calculated)
   const [currentPage, setCurrentPage] = useState(() => {
+    if (location.pathname.startsWith('/preview=')) {
+      return 1; // Temporary, will be set by PreviewRedirect
+    }
+    if (urlState.page > 1) {
+      return urlState.page;
+    }
     const saved = localStorage.getItem('yupooScraper_currentPage');
     return saved ? parseInt(saved, 10) : 1;
   });
@@ -119,14 +263,72 @@ const App: React.FC = () => {
 
   const [clearingDatabase, setClearingDatabase] = useState(false);
   const [clearDatabaseMessage, setClearDatabaseMessage] = useState<string | null>(null);
+  const [showClearDatabaseConfirm, setShowClearDatabaseConfirm] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewTitle, setPreviewTitle] = useState<string | null>(null);
   const [previewProductId, setPreviewProductId] = useState<number | undefined>(undefined);
   const [highlightedProductId, setHighlightedProductId] = useState<number | null>(null);
+  const [previewContext, setPreviewContext] = useState<'home' | 'lists'>('home');
+  const [listProducts, setListProducts] = useState<Product[]>([]);
 
   
   // --- Core Data Loading and State Persistence ---
+
+  // Sync URL state with modal visibility
+  useEffect(() => {
+    setShowSettingsModal(urlState.showSettings);
+    setShowLoginModal(urlState.showLogin || urlState.showSignup);
+    setIsSignupMode(urlState.showSignup);
+  }, [urlState.showSettings, urlState.showLogin, urlState.showSignup]);
+
+  // Save navigation stack to localStorage whenever it changes (without products to save space)
+  useEffect(() => {
+    // Convert Sets to arrays for JSON serialization and exclude products array
+    const stackToSave = searchStateStack.map(state => ({
+      type: state.type,
+      selectedTags: Array.from(state.selectedTags),
+      showViewAll: state.showViewAll,
+      currentPage: state.currentPage,
+      sortByColor: state.sortByColor,
+      productId: state.productId,
+      similarProductId: state.similarProductId,
+      sameBrand: state.sameBrand
+    }));
+    try {
+      localStorage.setItem('yupooScraper_navigationStack', JSON.stringify(stackToSave));
+    } catch (e) {
+      // If localStorage is full, clear the stack
+      console.error('Failed to save navigation stack:', e);
+      localStorage.removeItem('yupooScraper_navigationStack');
+    }
+  }, [searchStateStack]);
+
+  // Clear stack if user manually navigated (pasted link) instead of using our navigation
+  useEffect(() => {
+    if (!navigationInitiatedByUs.current && location.pathname.startsWith('/similar/')) {
+      // User navigated to similar page without using our buttons - clear the stack
+      setSearchStateStack([]);
+      localStorage.removeItem('yupooScraper_navigationStack');
+    }
+    // Reset the flag after checking
+    navigationInitiatedByUs.current = false;
+  }, [location.pathname]);
+
+  // Sync selectedTags with URL (but not during similar search mode or on similar route)
+  useEffect(() => {
+    if (!isInSimilarSearchMode && !location.pathname.startsWith('/similar/')) {
+      updateURLState({ tags: Array.from(selectedTags) });
+    }
+  }, [selectedTags, isInSimilarSearchMode, location.pathname, updateURLState]);
+
+  // Sync currentPage with URL (but not during similar search mode or on similar route)
+  useEffect(() => {
+    if (!isInSimilarSearchMode && !location.pathname.startsWith('/similar/')) {
+      updateURLState({ page: currentPage });
+    }
+  }, [currentPage, isInSimilarSearchMode, location.pathname, updateURLState]);
 
   // Check for existing auth token on mount
   useEffect(() => {
@@ -169,6 +371,10 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = () => {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('username');
     localStorage.removeItem('is_admin');
@@ -176,30 +382,72 @@ const App: React.FC = () => {
     setIsAuthenticated(false);
     setUsername('');
     setIsAdmin(false);
-    setCurrentTab('home');
+    navigate('/');
   };
 
   const handleLoginClick = () => {
     setShowLoginModal(true);
+    setIsSignupMode(false);
+    updateURLState({ showLogin: true, showSignup: false });
   };
 
   // Protect scraper tab - only admins can access
   useEffect(() => {
-    if (currentTab === 'scraper' && !isAdmin) {
-      setCurrentTab('home');
+    if (location.pathname === '/scraper' && !isAdmin) {
+      navigate('/');
       if (!isAuthenticated) {
         setShowLoginModal(true);
       }
     }
-  }, [currentTab, isAdmin, isAuthenticated]);
+  }, [location.pathname, isAdmin, isAuthenticated, navigate]);
+
+  // Fetch total products count on mount
+  useEffect(() => {
+    const fetchTotalCount = async () => {
+      try {
+        const response = await axios.get<Product[]>(buildApiUrl('/api/products/all'));
+        setTotalProductsCount(response.data.length);
+      } catch (error) {
+        console.error('Failed to fetch total products count:', error);
+      }
+    };
+    fetchTotalCount();
+  }, []);
 
   useEffect(() => {
     const fetchInitialData = async () => {
       await fetchTags();
   
       const isFirstVisit = !localStorage.getItem('yupooScraper_hasVisited');
+      const hasUrlTags = urlState.tags.length > 0;
       
-      if (isFirstVisit) {
+      // Skip initial data fetch if we're on the similar search route
+      if (location.pathname.startsWith('/similar/')) {
+        return;
+      }
+      
+      // If URL has tags, prioritize those over everything else
+      if (hasUrlTags) {
+        setSearchLoading(true);
+        try {
+          const tagsArray = urlState.tags;
+          const params: any = { tags: tagsArray.join(',') };
+          
+          if (sortByColor.length > 0) {
+            params.sort_by_colors = sortByColor.join(',');
+          }
+          
+          const response = await axios.get<Product[]>(buildApiUrl('/api/products'), { params });
+          setProducts(response.data);
+          if (response.data.length === 0) {
+            setSearchError('No products found with the specified tags');
+          }
+        } catch (err: any) {
+          setSearchError(err?.response?.data?.detail || 'An error occurred while loading products');
+        } finally {
+          setSearchLoading(false);
+        }
+      } else if (isFirstVisit) {
         await handleViewAll({ isFirstVisit: true });
         localStorage.setItem('yupooScraper_hasVisited', 'true');
       } else {
@@ -233,6 +481,50 @@ const App: React.FC = () => {
     fetchInitialData();
   }, []); // Runs only once on mount
 
+  // Restore preview from URL ONLY if it's a shared link (no history in stack) and only once on mount
+  useEffect(() => {
+    if (urlState.preview && products.length > 0 && searchStateStack.length === 0 && !initialPreviewProcessed.current) {
+      initialPreviewProcessed.current = true; // Mark as processed
+      
+      const productId = parseInt(urlState.preview, 10);
+      const productIndex = products.findIndex(p => p.id === productId);
+      
+      if (productIndex >= 0) {
+        const product = products[productIndex];
+        
+        // Calculate which page this product is on and navigate there
+        const pageNumber = Math.floor(productIndex / itemsPerPage) + 1;
+        if (location.pathname === '/' && pageNumber !== currentPage) {
+          setCurrentPage(pageNumber);
+          updateURLState({ page: pageNumber });
+        }
+        
+        // Only auto-open preview if NOT on similar search route
+        if (!location.pathname.startsWith('/similar/')) {
+          const imageSrc = product.image_path ? buildImageUrl(product.image_path) : product.image_url;
+          setPreviewImage(imageSrc);
+          setPreviewTitle(product.album_title);
+          setPreviewProductId(productId);
+          setPreviewContext('home');
+        } else {
+          // On similar search route from shared link: scroll and highlight
+          setTimeout(() => {
+            const productCard = document.querySelector(`[data-product-id="${productId}"]`);
+            if (productCard) {
+              setHighlightedProductId(productId);
+              productCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              
+              // Remove highlight after 2 seconds
+              setTimeout(() => {
+                setHighlightedProductId(null);
+              }, 2000);
+            }
+          }, 100);
+        }
+      }
+    }
+  }, [urlState.preview, products, itemsPerPage, location.pathname, searchStateStack.length]);
+
   useEffect(() => {
     localStorage.setItem('yupooScraper_itemsPerPage', itemsPerPage.toString());
     localStorage.setItem('yupooScraper_mobileGridCols', mobileGridCols.toString());
@@ -261,6 +553,7 @@ const App: React.FC = () => {
     if (!isAuthenticated || !authToken) {
       setScrapeError('Authentication required');
       setShowLoginModal(true);
+      updateURLState({ showLogin: true });
       return;
     }
 
@@ -378,6 +671,15 @@ const App: React.FC = () => {
     const currentSelectedColorTags = Array.from(selectedTags).filter(tag => tag.startsWith('color_')).map(tag => tag.replace('color_', ''));
     setSortByColor(currentSelectedColorTags);
 
+    // Update URL with selected tags
+    if (selectedTags.size > 0) {
+      const params = new URLSearchParams();
+      params.set('tags', Array.from(selectedTags).join(','));
+      navigate(`/?${params.toString()}`, { replace: true });
+    } else {
+      navigate('/', { replace: true });
+    }
+
     await performSearch(selectedTags);
     
     // Scroll to results section
@@ -426,11 +728,14 @@ const App: React.FC = () => {
     
     if (!isFirstVisit && !isRestoring) {
       setCurrentPage(1);
+      // Clear URL parameters when viewing all products
+      navigate('/', { replace: true });
     }
 
     try {
       const response = await axios.get<Product[]>(buildApiUrl('/api/products/all'));
       setProducts(response.data);
+      setTotalProductsCount(response.data.length);
       
       // Scroll to results section (not on first visit)
       if (!isFirstVisit && !isRestoring) {
@@ -454,13 +759,14 @@ const App: React.FC = () => {
     if (!isAuthenticated || !authToken) {
       setClearDatabaseMessage('✗ Error: Authentication required');
       setShowLoginModal(true);
+      updateURLState({ showLogin: true });
       return;
     }
 
-    if (!window.confirm('⚠️ WARNING: This will delete ALL products from the database. Are you sure?')) {
-      return;
-    }
+    setShowClearDatabaseConfirm(true);
+  };
 
+  const confirmClearDatabase = async () => {
     setClearingDatabase(true);
     setClearDatabaseMessage(null);
 
@@ -480,6 +786,7 @@ const App: React.FC = () => {
         setClearDatabaseMessage('✗ Error: Authentication expired. Please login again.');
         handleLogout();
         setShowLoginModal(true);
+        updateURLState({ showLogin: true });
       } else {
         setClearDatabaseMessage(`✗ Error: ${err?.response?.data?.message || err?.message || 'Failed to clear database'}`);
       }
@@ -493,20 +800,43 @@ const App: React.FC = () => {
     setPreviewImage(image);
     setPreviewTitle(title);
     setPreviewProductId(productId);
-  }, []);
+    setPreviewContext(location.pathname.startsWith('/lists') ? 'lists' : 'home');
+    updateURLState({ preview: productId ? productId.toString() : null });
+  }, [updateURLState, location.pathname]);
 
   const handlePreviewNavigate = useCallback((productId: number) => {
     setHighlightedProductId(null);
-    const product = products.find(p => p.id === productId);
+    const productsToUse = previewContext === 'lists' ? listProducts : products;
+    const product = productsToUse.find(p => p.id === productId);
     if (product) {
       const imageSrc = product.image_path ? buildImageUrl(product.image_path) : product.image_url;
       setPreviewImage(imageSrc);
       setPreviewTitle(product.album_title);
       setPreviewProductId(productId);
+      updateURLState({ preview: productId.toString() });
+      
+      // Only update page number if on home route, not on lists
+      if (previewContext === 'home') {
+        const productIndex = productsToUse.findIndex(p => p.id === productId);
+        if (productIndex !== -1) {
+          const correctPage = Math.floor(productIndex / itemsPerPage) + 1;
+          if (correctPage !== currentPage) {
+            setCurrentPage(correctPage);
+          }
+        }
+      }
     }
-  }, [products]);
+  }, [products, listProducts, previewContext, itemsPerPage, currentPage, updateURLState]);
 
   const handleCloseWithHighlight = useCallback((productId: number) => {
+    // Only handle page changes on home route, not lists
+    if (previewContext !== 'home') {
+      setPreviewImage(null);
+      setPreviewTitle(null);
+      setPreviewProductId(undefined);
+      return;
+    }
+    
     // Find the product index in the products array
     const productIndex = products.findIndex(p => p.id === productId);
     if (productIndex === -1) return;
@@ -554,44 +884,224 @@ const App: React.FC = () => {
     }
   }, [products, itemsPerPage, currentPage]);
 
-  const handleSimilarSearch = (product: Product, sameBrand: boolean) => {
-    const newSelected = new Set<string>();
-    const colorTags = product.tags.filter(tag => tag.startsWith('color_'));
-    const typeTags = product.tags.filter(tag => tag.startsWith('type_'));
-
-    colorTags.forEach(tag => newSelected.add(tag));
-    typeTags.forEach(tag => newSelected.add(tag));
-
-    if (sameBrand) {
-        const brandTags = product.tags.filter(tag => tag.startsWith('company_'));
-        brandTags.forEach(tag => newSelected.add(tag));
+  const handleSimilarSearch = async (product: Product, sameBrand: boolean) => {
+    // Determine if we're on main page or similar search page
+    const isOnMainPage = !location.pathname.startsWith('/similar/');
+    
+    if (isOnMainPage) {
+      // Push main page state to stack
+      setSearchStateStack(prev => [...prev, {
+        type: 'main',
+        products: [...products],
+        selectedTags: new Set(selectedTags),
+        showViewAll,
+        currentPage,
+        sortByColor: [...sortByColor],
+        productId: product.id
+      }]);
+    } else {
+      // Push current similar search state to stack
+      const currentSimilarProductId = location.pathname.split('/').pop();
+      const currentSameBrand = new URLSearchParams(location.search).get('sameBrand') === 'true';
+      
+      setSearchStateStack(prev => [...prev, {
+        type: 'similar',
+        products: [...products],
+        selectedTags: new Set(selectedTags),
+        showViewAll: false,
+        currentPage,
+        sortByColor: [...sortByColor],
+        productId: product.id,
+        similarProductId: parseInt(currentSimilarProductId || '0'),
+        sameBrand: currentSameBrand
+      }]);
     }
 
-    setSelectedTags(newSelected);
-    setCurrentPage(1);
-    setShowViewAll(false);
+    // Build route with preserved URL state for sharing/history
+    const currentParams = new URLSearchParams(location.search);
+    // Clear sameBrand first, then set if needed
+    currentParams.delete('sameBrand');
+    if (sameBrand) {
+      currentParams.set('sameBrand', 'true');
+    }
+    const queryString = currentParams.toString();
+    const route = queryString ? `/similar/${product.id}?${queryString}` : `/similar/${product.id}`;
+    
+    navigationInitiatedByUs.current = true; // Mark that we initiated this navigation
+    navigate(route);
+  };
 
-    const currentSelectedColorTags = Array.from(newSelected).filter(t => t.startsWith('color_')).map(t => t.replace('color_', ''));
-    setSortByColor(currentSelectedColorTags);
-
-    performSearch(newSelected);
-};
+  const handleBackToPreviousResults = () => {
+    if (searchStateStack.length > 0) {
+      // Pop the last state from stack
+      const previousState = searchStateStack[searchStateStack.length - 1];
+      setSearchStateStack(prev => prev.slice(0, -1));
+      
+      // Restore state from stack
+      setProducts(previousState.products);
+      setSelectedTags(previousState.selectedTags);
+      setShowViewAll(previousState.showViewAll);
+      setCurrentPage(previousState.currentPage);
+      setSortByColor(previousState.sortByColor);
+      setSearchError(null);
+      
+      if (previousState.type === 'main') {
+        // Navigate back to main page
+        setIsInSimilarSearchMode(false);
+        
+        // Build URL with preserved state
+        const params = new URLSearchParams();
+        if (previousState.selectedTags.size > 0) {
+          params.set('tags', Array.from(previousState.selectedTags).join(','));
+        }
+        if (previousState.currentPage > 1) {
+          params.set('page', previousState.currentPage.toString());
+        }
+        const queryString = params.toString();
+        const targetUrl = queryString ? `/?${queryString}` : '/';
+        
+        setTimeout(() => {
+          navigationInitiatedByUs.current = true; // Mark that we initiated this navigation
+          navigate(targetUrl);
+          
+          // Scroll to and highlight the product that triggered the similar search
+          setTimeout(() => {
+            const productCard = document.querySelector(`[data-product-id="${previousState.productId}"]`);
+            if (productCard) {
+              setHighlightedProductId(previousState.productId);
+              productCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              
+              setTimeout(() => {
+                setHighlightedProductId(null);
+              }, 2000);
+            }
+          }, 100);
+        }, 50);
+      } else {
+        // Navigate back to previous similar search page (on the /similar/ route)
+        setIsInSimilarSearchMode(true);
+        
+        // Build URL with preserved state for similar search
+        const params = new URLSearchParams();
+        // Preserve original tags and params from when this similar search was made
+        if (previousState.selectedTags.size > 0) {
+          params.set('tags', Array.from(previousState.selectedTags).join(','));
+        }
+        if (previousState.sameBrand) {
+          params.set('sameBrand', 'true');
+        }
+        const queryString = params.toString();
+        const targetUrl = queryString 
+          ? `/similar/${previousState.similarProductId}?${queryString}` 
+          : `/similar/${previousState.similarProductId}`;
+        
+        setTimeout(() => {
+          navigationInitiatedByUs.current = true; // Mark that we initiated this navigation
+          navigate(targetUrl);
+          
+          // Scroll to and highlight the product that triggered the next similar search
+          setTimeout(() => {
+            const productCard = document.querySelector(`[data-product-id="${previousState.productId}"]`);
+            if (productCard) {
+              setHighlightedProductId(previousState.productId);
+              productCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              
+              setTimeout(() => {
+                setHighlightedProductId(null);
+              }, 2000);
+            }
+          }, 100);
+        }, 50);
+      }
+    } else {
+      // No state in memory - user opened shared link directly
+      // Parse URL params from current location to restore state
+      const params = new URLSearchParams(location.search);
+      const tags = params.get('tags')?.split(',').filter(Boolean) || [];
+      const page = parseInt(params.get('page') || '1', 10);
+      const preview = params.get('preview');
+      
+      // Restore tags to state
+      if (tags.length > 0) {
+        setSelectedTags(new Set(tags));
+      }
+      
+      // Build target URL preserving the original state
+      const targetParams = new URLSearchParams();
+      if (tags.length > 0) targetParams.set('tags', tags.join(','));
+      if (page > 1) targetParams.set('page', page.toString());
+      if (preview) targetParams.set('preview', preview);
+      
+      const queryString = targetParams.toString();
+      const targetUrl = queryString ? `/?${queryString}` : '/';
+      
+      setIsInSimilarSearchMode(false);
+      navigationInitiatedByUs.current = true; // Mark that we initiated this navigation
+      navigate(targetUrl);
+    }
+  };
 
   return (
-    <div className="min-h-screen safe-area">
+    <div className="min-h-screen safe-area" style={{ backgroundColor: 'var(--bg-color)' }}>
       <NavigationBar 
-        currentTab={currentTab} 
-        setCurrentTab={setCurrentTab}
-        onSettingsClick={() => setShowSettingsModal(true)}
+        onSettingsClick={() => {
+          setShowSettingsModal(true);
+          updateURLState({ showSettings: true });
+        }}
         isAuthenticated={isAuthenticated}
         username={username}
         isAdmin={isAdmin}
         onLoginClick={handleLoginClick}
         onLogoutClick={handleLogout}
       />
-      <div className="container px-0 py-8 pt-40 mx-auto md:pt-28">
-        {currentTab === 'home' ? (
-                      <MainContent
+      <Routes>
+        <Route path="/preview=:productId" element={
+          <PreviewRedirect 
+            products={products}
+            itemsPerPage={itemsPerPage}
+            setCurrentPage={setCurrentPage}
+            setPreviewImage={setPreviewImage}
+            setPreviewTitle={setPreviewTitle}
+            setPreviewProductId={setPreviewProductId}
+            setPreviewContext={setPreviewContext}
+            navigate={navigate}
+          />
+        } />
+        <Route path="/similar/:productId" element={
+          <SimilarSearchPage
+            setProducts={setProducts}
+            setSearchLoading={setSearchLoading}
+            setSearchError={setSearchError}
+            setIsInSimilarSearchMode={setIsInSimilarSearchMode}
+            searchLoading={searchLoading}
+            searchError={searchError}
+            products={products}
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+            itemsPerPage={itemsPerPage}
+            setItemsPerPage={setItemsPerPage}
+            mobileGridCols={mobileGridCols}
+            setMobileGridCols={setMobileGridCols}
+            onImageClick={(image, title, productId) => {
+              onImageClick(image, title, productId);
+              // Update preview in URL
+              if (productId) {
+                updateURLState({ preview: productId.toString() });
+              }
+            }}
+            onBackToPreviousResults={handleBackToPreviousResults}
+            highlightedProductId={highlightedProductId}
+            isAuthenticated={isAuthenticated}
+            authToken={authToken}
+            onLoginRequired={() => {
+              setShowLoginModal(true);
+              updateURLState({ showLogin: true });
+            }}
+          />
+        } />
+        <Route path="/" element={
+          <div className="container px-0 py-8 pt-40 mx-auto md:pt-28">
+            <MainContent
                       tagsLoading={tagsLoading}
                       allTags={allTags}
                       selectedTags={selectedTags}
@@ -607,11 +1117,14 @@ const App: React.FC = () => {
                       handleSimilarSearch={handleSimilarSearch}
                       searchLoading={searchLoading}
                       searchError={searchError}
+                      isInSimilarSearchMode={isInSimilarSearchMode}
+                      onBackToPreviousResults={handleBackToPreviousResults}
                       Array={Array}
                       sortByColor={sortByColor}
                       setSortByColor={setSortByColor}
                       products={products}
                       showViewAll={showViewAll}
+                      totalProductsCount={totalProductsCount}
                       currentPage={currentPage}
                       setCurrentPage={setCurrentPage}
                       itemsPerPage={itemsPerPage}
@@ -627,17 +1140,50 @@ const App: React.FC = () => {
                       highlightedProductId={highlightedProductId}
                       isAuthenticated={isAuthenticated}
                       authToken={authToken}
-                      onLoginRequired={() => setShowLoginModal(true)}
+                      onLoginRequired={() => {
+                        setShowLoginModal(true);
+                        updateURLState({ showLogin: true });
+                      }}
                     />
-                  ) : currentTab === 'lists' ? (
-                    <MyLists
+          </div>
+        } />
+        <Route path="/lists" element={
+          <div className="container px-0 py-8 pt-40 mx-auto md:pt-28">
+            <MyLists
                       authToken={authToken}
                       isAuthenticated={isAuthenticated}
-                      onLoginRequired={() => setShowLoginModal(true)}
+                      onLoginRequired={() => {
+                        setShowLoginModal(true);
+                        updateURLState({ showLogin: true });
+                      }}
                       onImageClick={onImageClick}
+                      onSimilarSearch={handleSimilarSearch}
+                      mobileGridCols={mobileGridCols}
+                      setMobileGridCols={setMobileGridCols}
+                      onListProductsChange={setListProducts}
                     />
-                  ) : (
-                    <ScraperGUI 
+          </div>
+        } />
+        <Route path="/lists/:listName" element={
+          <div className="container px-0 py-8 pt-40 mx-auto md:pt-28">
+            <MyLists
+                      authToken={authToken}
+                      isAuthenticated={isAuthenticated}
+                      onLoginRequired={() => {
+                        setShowLoginModal(true);
+                        updateURLState({ showLogin: true });
+                      }}
+                      onImageClick={onImageClick}
+                      onSimilarSearch={handleSimilarSearch}
+                      mobileGridCols={mobileGridCols}
+                      setMobileGridCols={setMobileGridCols}
+                      onListProductsChange={setListProducts}
+                    />
+          </div>
+        } />
+        <Route path="/scraper" element={
+          <div className="container px-0 py-8 pt-40 mx-auto md:pt-28">
+            <ScraperGUI 
                       scrapeUrl={scrapeUrl}
                       setScrapeUrl={setScrapeUrl}
                       maxAlbums={maxAlbums}
@@ -656,8 +1202,11 @@ const App: React.FC = () => {
                       clearDatabaseMessage={clearDatabaseMessage}
                       authToken={authToken}
                     />
-        )}
-        {previewImage && (
+          </div>
+        } />
+          </Routes>
+          
+          {previewImage && (
           <ImagePreview 
             image={previewImage}
             title={previewTitle}
@@ -665,26 +1214,83 @@ const App: React.FC = () => {
               setPreviewImage(null);
               setPreviewTitle(null);
               setPreviewProductId(undefined);
+              // Only update URL state if NOT navigating to similar route
+              // Check the current location at close time
+              if (!window.location.pathname.startsWith('/similar/')) {
+                updateURLState({ preview: null });
+              }
             }}
-            products={products}
+            products={previewContext === 'lists' ? listProducts : products}
             currentProductId={previewProductId}
             onNavigate={handlePreviewNavigate}
             onCloseWithHighlight={handleCloseWithHighlight}
             onSimilarSearch={handleSimilarSearch}
             isAuthenticated={isAuthenticated}
             authToken={authToken}
-            onLoginRequired={() => setShowLoginModal(true)}
+            onLoginRequired={() => {
+              setShowLoginModal(true);
+              updateURLState({ showLogin: true });
+            }}
+            allProducts={products}
+            itemsPerPage={itemsPerPage}
           />
         )}
-      </div>
+
+      {/* Clear Database Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showClearDatabaseConfirm}
+        onClose={() => setShowClearDatabaseConfirm(false)}
+        onConfirm={confirmClearDatabase}
+        title="⚠️ Clear Database"
+        message="WARNING: This will permanently delete ALL products from the database. This action cannot be undone. Are you absolutely sure?"
+        confirmText="Delete Everything"
+        cancelText="Cancel"
+        isDanger={true}
+      />
+
+      {/* Logout Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={confirmLogout}
+        title="Sign Out"
+        message="Are you sure you want to sign out?"
+        confirmText="Sign Out"
+        cancelText="Cancel"
+        isDanger={false}
+      />
+
+      {/* Logout Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={confirmLogout}
+        title="Sign Out"
+        message="Are you sure you want to sign out?"
+        confirmText="Sign Out"
+        cancelText="Cancel"
+        isDanger={false}
+      />
+
       <SettingsModal 
         isOpen={showSettingsModal} 
-        onClose={() => setShowSettingsModal(false)}
+        onClose={() => {
+          setShowSettingsModal(false);
+          updateURLState({ showSettings: false });
+        }}
       />
       <LoginModal
         show={showLoginModal}
-        onClose={() => setShowLoginModal(false)}
+        onClose={() => {
+          setShowLoginModal(false);
+          updateURLState({ showLogin: false, showSignup: false });
+        }}
         onLoginSuccess={handleLoginSuccess}
+        isSignupMode={isSignupMode}
+        onToggleMode={(isSignup) => {
+          setIsSignupMode(isSignup);
+          updateURLState({ showLogin: !isSignup, showSignup: isSignup });
+        }}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Share2, Loader } from 'lucide-react';
 import axios from 'axios';
 import { buildApiUrl } from './api-config';
 import { Product } from './types';
@@ -17,6 +17,8 @@ interface ImagePreviewProps {
   isAuthenticated?: boolean;
   authToken?: string | null;
   onLoginRequired?: () => void;
+  allProducts?: Product[]; // All products for generating shareable link
+  itemsPerPage?: number; // For calculating page number
 }
 
 const ImagePreview: React.FC<ImagePreviewProps> = ({ 
@@ -30,7 +32,9 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
   onSimilarSearch,
   isAuthenticated = false,
   authToken = null,
-  onLoginRequired = () => {}
+  onLoginRequired = () => {},
+  allProducts,
+  itemsPerPage = 60
 }) => {
   const [offsetY, setOffsetY] = useState(0);
   const [offsetX, setOffsetX] = useState(0);
@@ -39,6 +43,7 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
   const [imageOpacity, setImageOpacity] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [showCopiedMessage, setShowCopiedMessage] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
   const dragDirection = useRef<'horizontal' | 'vertical' | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -47,6 +52,11 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
   const [isFetchingLink, setIsFetchingLink] = useState(false);
   const [pendingSimilarSearch, setPendingSimilarSearch] = useState<boolean | null>(null);
   const similarSearchTimeoutRef = useRef<number | null>(null);
+  const [showControls, setShowControls] = useState(true);
+  const [isHoveringButton, setIsHoveringButton] = useState(false);
+  const mouseTimeoutRef = useRef<number | null>(null);
+  const touchTimeoutRef = useRef<number | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
 
   // Find current product index
   const currentIndex = products?.findIndex(p => p.id === currentProductId) ?? -1;
@@ -62,6 +72,11 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
     setBgOpacity(1);
     setImageOpacity(1);
   }, []);
+
+  // Detect image changes and show loading spinner
+  useEffect(() => {
+    setImageLoading(true);
+  }, [image]);
 
   // Close with zoom-out animation for click/ESC
   const handleClose = () => {
@@ -88,10 +103,72 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
     return () => document.removeEventListener('keydown', handleEsc);
   }, [closing, onCloseWithHighlight, currentProductId]);
 
+  // Handle mouse movement - show/hide controls
+  const handleMouseMove = () => {
+    setShowControls(true);
+    
+    // Clear existing timeout
+    if (mouseTimeoutRef.current) {
+      clearTimeout(mouseTimeoutRef.current);
+    }
+    
+    // Hide controls after 3 seconds of no movement (unless hovering button)
+    mouseTimeoutRef.current = window.setTimeout(() => {
+      if (!isHoveringButton) {
+        setShowControls(false);
+      }
+    }, 3000);
+  };
+
+  // Handle touch - show/hide controls on mobile
+  const handleTouchStart = () => {
+    if (!isMobile()) return;
+    setShowControls(true);
+    
+    // Clear existing timeout
+    if (touchTimeoutRef.current) {
+      clearTimeout(touchTimeoutRef.current);
+    }
+    
+    // Hide controls after 3 seconds of no touch (unless hovering button)
+    touchTimeoutRef.current = window.setTimeout(() => {
+      if (!isHoveringButton) {
+        setShowControls(false);
+      }
+    }, 3000);
+  };
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (mouseTimeoutRef.current) {
+        clearTimeout(mouseTimeoutRef.current);
+      }
+      if (touchTimeoutRef.current) {
+        clearTimeout(touchTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Handle share button - generate shareable link
+  const handleShare = async () => {
+    if (!currentProductId) return;
+    
+    const shareableUrl = `${window.location.origin}/?preview=${currentProductId}`;
+    
+    try {
+      await navigator.clipboard.writeText(shareableUrl);
+      setShowCopiedMessage(true);
+      setTimeout(() => setShowCopiedMessage(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy link:', err);
+    }
+  };
+
   // --- Drag/Swipe Handlers ---
 
   const handleDragStart = (clientX: number, clientY: number) => {
-    if (closing || isNavigatingRef.current) return;
+    if (closing || isNavigatingRef.current || imageLoading) return;
     if (containerRef.current) containerRef.current.style.transition = 'none';
     setIsDragging(true);
     dragStartRef.current = { x: clientX, y: clientY };
@@ -174,29 +251,51 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
   };
 
   const handleNavigatePrev = () => {
+    if (imageLoading) return;
     if (canGoPrev && products && onNavigate) {
       isNavigatingRef.current = true;
       const isSwipe = isSwipeNavigationRef.current;
       isSwipeNavigationRef.current = false;
       
       if (isSwipe) {
-        // Slide animation for swipe
-        if (containerRef.current) containerRef.current.style.transition = 'transform 0.2s cubic-bezier(0.4, 0.0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)';
+        // Step 1: Slide current image out to the right with transition
+        if (containerRef.current) {
+          containerRef.current.style.transition = 'transform 0.2s cubic-bezier(0.4, 0.0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)';
+        }
         setOffsetX(window.innerWidth);
         setImageOpacity(0);
+        
         setTimeout(() => {
-          // Instantly reset to left side
-          if (containerRef.current) containerRef.current.style.transition = 'none';
+          // Step 2: Remove transition and position image on the left BEFORE changing content
+          if (containerRef.current) {
+            containerRef.current.style.transition = 'none';
+          }
           setOffsetX(-window.innerWidth);
-          onNavigate(products[currentIndex - 1].id);
-          // Slide in from left
+          
+          // Step 3: Force reflow to ensure position is applied
+          if (containerRef.current) {
+            void containerRef.current.offsetHeight;
+          }
+          
+          // Step 4: Change the image content after position is set
           setTimeout(() => {
-            if (containerRef.current) containerRef.current.style.transition = 'transform 0.2s cubic-bezier(0.4, 0.0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)';
-            setOffsetX(0);
-            setImageOpacity(1);
-            setBgOpacity(1);
-            isNavigatingRef.current = false;
-          }, 20);
+            onNavigate(products[currentIndex - 1].id);
+            
+            // Step 5: Re-enable transition and slide in from left
+            requestAnimationFrame(() => {
+              if (containerRef.current) {
+                containerRef.current.style.transition = 'transform 0.2s cubic-bezier(0.4, 0.0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)';
+              }
+              requestAnimationFrame(() => {
+                setOffsetX(0);
+                setImageOpacity(1);
+                setBgOpacity(1);
+                setTimeout(() => {
+                  isNavigatingRef.current = false;
+                }, 200);
+              });
+            });
+          }, 10);
         }, 200);
       } else {
         // Instant navigation for button/key
@@ -207,29 +306,51 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
   };
 
   const handleNavigateNext = () => {
+    if (imageLoading) return;
     if (canGoNext && products && onNavigate) {
       isNavigatingRef.current = true;
       const isSwipe = isSwipeNavigationRef.current;
       isSwipeNavigationRef.current = false;
       
       if (isSwipe) {
-        // Slide animation for swipe
-        if (containerRef.current) containerRef.current.style.transition = 'transform 0.2s cubic-bezier(0.4, 0.0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)';
+        // Step 1: Slide current image out to the left with transition
+        if (containerRef.current) {
+          containerRef.current.style.transition = 'transform 0.2s cubic-bezier(0.4, 0.0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)';
+        }
         setOffsetX(-window.innerWidth);
         setImageOpacity(0);
+        
         setTimeout(() => {
-          // Instantly reset to right side
-          if (containerRef.current) containerRef.current.style.transition = 'none';
+          // Step 2: Remove transition and position image on the right BEFORE changing content
+          if (containerRef.current) {
+            containerRef.current.style.transition = 'none';
+          }
           setOffsetX(window.innerWidth);
-          onNavigate(products[currentIndex + 1].id);
-          // Slide in from right
+          
+          // Step 3: Force reflow to ensure position is applied
+          if (containerRef.current) {
+            void containerRef.current.offsetHeight;
+          }
+          
+          // Step 4: Change the image content after position is set
           setTimeout(() => {
-            if (containerRef.current) containerRef.current.style.transition = 'transform 0.2s cubic-bezier(0.4, 0.0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)';
-            setOffsetX(0);
-            setImageOpacity(1);
-            setBgOpacity(1);
-            isNavigatingRef.current = false;
-          }, 20);
+            onNavigate(products[currentIndex + 1].id);
+            
+            // Step 5: Re-enable transition and slide in from right
+            requestAnimationFrame(() => {
+              if (containerRef.current) {
+                containerRef.current.style.transition = 'transform 0.2s cubic-bezier(0.4, 0.0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)';
+              }
+              requestAnimationFrame(() => {
+                setOffsetX(0);
+                setImageOpacity(1);
+                setBgOpacity(1);
+                setTimeout(() => {
+                  isNavigatingRef.current = false;
+                }, 200);
+              });
+            });
+          }, 10);
         }, 200);
       } else {
         // Instant navigation for button/key
@@ -261,6 +382,7 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (imageLoading) return;
       if (e.key === 'ArrowLeft' && canGoPrev) {
         handleNavigatePrev();
       } else if (e.key === 'ArrowRight' && canGoNext) {
@@ -269,7 +391,7 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [canGoPrev, canGoNext, currentIndex]);
+  }, [canGoPrev, canGoNext, currentIndex, imageLoading]);
 
   // Cleanup similar search timeout
   useEffect(() => {
@@ -305,12 +427,18 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
     if (!currentProduct || !onSimilarSearch) return;
     
     if (pendingSimilarSearch === sameBrand) {
-      onSimilarSearch(currentProduct, sameBrand);
-      setPendingSimilarSearch(null);
+      // Clear timeout first
       if (similarSearchTimeoutRef.current) {
         clearTimeout(similarSearchTimeoutRef.current);
       }
-      handleClose();
+      setPendingSimilarSearch(null);
+      
+      // Call similar search FIRST - this navigates to /similar/:id
+      onSimilarSearch(currentProduct, sameBrand);
+      
+      // Then close preview directly (onClose will update URL state but 
+      // it's protected to not do anything on /similar/ routes)
+      onClose();
     } else {
       setPendingSimilarSearch(sameBrand);
       if (similarSearchTimeoutRef.current) {
@@ -360,8 +488,18 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
         backgroundColor: `rgba(0, 0, 0, ${bgOpacity * 0.5})`,
         backdropFilter: `blur(${bgOpacity * 16}px)`,
         transition: isDragging ? 'none' : 'background-color 0.3s cubic-bezier(0.4, 0.0, 0.2, 1), backdrop-filter 0.3s cubic-bezier(0.4, 0.0, 0.2, 1)',
+        touchAction: 'none',
+        overscrollBehavior: 'contain',
       }}
       onClick={handleClose}
+      onMouseMove={handleMouseMove}
+      onTouchStart={handleTouchStart}
+      onTouchMove={(e) => {
+        // Prevent default scrolling on the background
+        if (e.target === e.currentTarget) {
+          e.preventDefault();
+        }
+      }}
     >
       {/* Fixed touch capture overlay - matches image preview size but stays fixed */}
       <div
@@ -413,25 +551,76 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
           handlePointerUp(e as any);
         }}
       >
-        <div className="relative inline-block flex-shrink-0">
+        <div className="relative flex-shrink-0 inline-block">
           <button
             onClick={handleClose}
-            className="absolute z-10 flex items-center justify-center w-12 h-12 text-3xl text-white transition-colors bg-black bg-opacity-50 rounded-full top-4 right-4 hover:text-gray-300"
-            style={{ pointerEvents: 'auto', zIndex: 20 }}
+            className={`absolute z-10 flex items-center justify-center transition-all border rounded-xl backdrop-blur-md top-4 right-4 ${isMobile() ? 'w-10 h-10 text-xl' : 'w-14 h-14 text-3xl'}`}
+            style={{ 
+              pointerEvents: 'auto', 
+              zIndex: 20,
+              backgroundColor: 'rgba(255, 80, 80, 0.5)',
+              borderColor: 'rgba(255, 100, 100, 0.5)',
+              color: '#ffffff',
+              boxShadow: `0 4px 16px rgba(255, 80, 80, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)`
+            }}
           >
             ✕
           </button>
 
-          {/* Save Button - underneath close button */}
+          {/* Save Button - top right, left of close button */}
           {currentProductId && (
-            <div className="absolute z-10 top-20 right-4" style={{ pointerEvents: 'auto', zIndex: 20 }}>
+            <div 
+              className="absolute z-10 flex gap-2 top-4 right-20"
+              style={{ 
+                zIndex: 20,
+                opacity: showControls || isHoveringButton ? 1 : 0,
+                transition: 'opacity 0.3s ease-in-out',
+                pointerEvents: showControls || isHoveringButton ? 'auto' : 'none'
+              }}
+              onMouseEnter={() => setIsHoveringButton(true)}
+              onMouseLeave={() => setIsHoveringButton(false)}
+            >
               <SaveButton
+                key={currentProductId}
                 productId={currentProductId}
                 isAuthenticated={isAuthenticated}
                 authToken={authToken}
                 onLoginRequired={onLoginRequired}
-                compact={false}
+                compact={isMobile()}
               />
+            </div>
+          )}
+          
+          {/* Share Button - bottom right */}
+          {currentProductId && (
+            <div className="absolute z-10 bottom-4 right-4"
+              style={{ 
+                zIndex: 20,
+                opacity: showControls || isHoveringButton ? 1 : 0,
+                transition: 'opacity 0.3s ease-in-out',
+                pointerEvents: showControls || isHoveringButton ? 'auto' : 'none'
+              }}
+              onMouseEnter={() => setIsHoveringButton(true)}
+              onMouseLeave={() => setIsHoveringButton(false)}
+            >
+              <button
+                onClick={handleShare}
+                className={`flex items-center justify-center transition-all border rounded-xl backdrop-blur-md ${isMobile() ? 'w-10 h-10' : 'w-14 h-14'}`}
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                  borderColor: 'var(--glass-border)',
+                  color: 'var(--text-color)',
+                  boxShadow: `0 4px 16px var(--glass-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.1)`
+                }}
+                title="Copy shareable link"
+              >
+                <Share2 size={isMobile() ? 18 : 22} />
+              </button>
+              {showCopiedMessage && (
+                <div className="absolute px-3 py-1 text-sm text-white bg-black bg-opacity-75 rounded-lg whitespace-nowrap top-full mt-2 left-1/2 -translate-x-1/2">
+                  Link copied!
+                </div>
+              )}
             </div>
           )}
           
@@ -442,10 +631,24 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
                 e.stopPropagation();
                 handleNavigatePrev();
               }}
-              className="absolute z-10 flex items-center justify-center w-12 h-12 text-white transition-all transform -translate-y-1/2 bg-black bg-opacity-50 rounded-full left-4 top-1/2 hover:bg-opacity-70 hover:scale-110"
-              style={{ pointerEvents: 'auto', zIndex: 20 }}
+              disabled={imageLoading}
+              className={`absolute z-10 flex items-center justify-center transition-all transform -translate-y-1/2 border rounded-xl backdrop-blur-md left-4 top-1/2 ${isMobile() ? 'w-10 h-10' : 'w-14 h-14'}`}
+              style={{ 
+                pointerEvents: 'auto', 
+                zIndex: 20,
+                backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                borderColor: 'var(--glass-border)',
+                color: 'var(--text-color)',
+                boxShadow: `0 4px 16px var(--glass-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.1)`,
+                opacity: imageLoading ? 0.3 : (showControls || isHoveringButton ? 1 : 0),
+                transition: 'opacity 0.3s ease-in-out',
+                pointerEvents: imageLoading ? 'none' : (showControls || isHoveringButton ? 'auto' : 'none'),
+                cursor: imageLoading ? 'not-allowed' : 'pointer'
+              }}
+              onMouseEnter={() => setIsHoveringButton(true)}
+              onMouseLeave={() => setIsHoveringButton(false)}
             >
-              <ChevronLeft size={32} />
+              <ChevronLeft size={isMobile() ? 22 : 36} />
             </button>
           )}
           
@@ -456,31 +659,53 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
                 e.stopPropagation();
                 handleNavigateNext();
               }}
-              className="absolute z-10 flex items-center justify-center w-12 h-12 text-white transition-all transform -translate-y-1/2 bg-black bg-opacity-50 rounded-full right-4 top-1/2 hover:bg-opacity-70 hover:scale-110"
-              style={{ pointerEvents: 'auto', zIndex: 20 }}
+              disabled={imageLoading}
+              className={`absolute z-10 flex items-center justify-center transition-all transform -translate-y-1/2 border rounded-xl backdrop-blur-md right-4 top-1/2 ${isMobile() ? 'w-10 h-10' : 'w-14 h-14'}`}
+              style={{ 
+                pointerEvents: 'auto', 
+                zIndex: 20,
+                backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                borderColor: 'var(--glass-border)',
+                color: 'var(--text-color)',
+                boxShadow: `0 4px 16px var(--glass-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.1)`,
+                opacity: imageLoading ? 0.3 : (showControls || isHoveringButton ? 1 : 0),
+                transition: 'opacity 0.3s ease-in-out',
+                pointerEvents: imageLoading ? 'none' : (showControls || isHoveringButton ? 'auto' : 'none'),
+                cursor: imageLoading ? 'not-allowed' : 'pointer'
+              }}
+              onMouseEnter={() => setIsHoveringButton(true)}
+              onMouseLeave={() => setIsHoveringButton(false)}
             >
-              <ChevronRight size={32} />
+              <ChevronRight size={isMobile() ? 22 : 36} />
             </button>
           )}
-          <div className="flex items-center justify-center flex-shrink-0 rounded-lg shadow-2xl overflow-hidden" style={{ 
+          <div className="flex items-center justify-center flex-shrink-0 overflow-hidden rounded-lg shadow-2xl" style={{ 
             width: 'min(70vh, 90vw)',
             height: 'min(70vh, 90vw)',
             backgroundColor: 'rgba(0, 0, 0, 0.3)',
           }}>
+            {imageLoading && (
+              <div className="absolute z-20 flex items-center justify-center">
+                <Loader size={48} className="animate-spin" style={{ color: 'var(--primary-color)' }} />
+              </div>
+            )}
             <img
               src={image}
               alt={title || "Preview"}
-              className="w-full h-full object-contain"
+              className="object-contain w-full h-full"
+              style={{ opacity: imageLoading ? 0 : 1, transition: 'opacity 0.2s ease-in-out' }}
+              onLoad={() => setImageLoading(false)}
               onError={(e) => {
                 e.currentTarget.src = 'https://via.placeholder.com/800?text=Image+Not+Found';
+                setImageLoading(false);
               }}
             />
           </div>
         </div>
 
         {title && (
-          <div className="mt-4 text-center px-2 w-full overflow-hidden" style={{ height: '2.5rem' }}>
-            <p className="text-sm font-semibold text-white line-clamp-2 break-words">
+          <div className="w-full px-2 mt-4 overflow-hidden text-center" style={{ height: '2.5rem' }}>
+            <p className="text-sm font-semibold text-white break-words line-clamp-2">
               {title}
             </p>
           </div>
@@ -488,14 +713,15 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
 
         {/* Action Buttons */}
         {currentProduct && (
-          <div className="grid grid-cols-2 gap-2 mt-4 px-4 w-full" style={{ pointerEvents: 'auto', zIndex: 20, position: 'relative' }}>
+          <div className="grid w-full grid-cols-2 gap-2 px-4 mt-4" style={{ pointerEvents: 'auto', zIndex: 20, position: 'relative' }}>
             <button
               onClick={() => handleSimilarSearchClick(true)}
-              className="px-2 py-1 text-xs font-semibold text-center rounded border transition-all flex items-center justify-center whitespace-nowrap"
+              className="flex items-center justify-center px-2 py-1 text-xs font-semibold text-center transition-all border rounded backdrop-blur-md whitespace-nowrap"
               style={{
-                backgroundColor: pendingSimilarSearch === true ? 'rgb(239, 68, 68)' : 'rgba(239, 68, 68, 0.8)',
+                backgroundColor: pendingSimilarSearch === true ? 'rgba(239, 68, 68, 0.9)' : 'rgba(239, 68, 68, 0.6)',
                 color: '#ffffff',
                 borderColor: 'rgba(255, 255, 255, 0.3)',
+                boxShadow: `0 4px 16px rgba(239, 68, 68, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)`,
                 transform: pendingSimilarSearch === true ? 'scale(1.05)' : 'scale(1)',
               }}
             >
@@ -503,11 +729,12 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
             </button>
             <button
               onClick={() => handleSimilarSearchClick(false)}
-              className="px-2 py-1 text-xs font-semibold text-center rounded border transition-all flex items-center justify-center whitespace-nowrap"
+              className="flex items-center justify-center px-2 py-1 text-xs font-semibold text-center transition-all border rounded backdrop-blur-md whitespace-nowrap"
               style={{
-                backgroundColor: pendingSimilarSearch === false ? 'rgb(239, 68, 68)' : 'rgba(239, 68, 68, 0.8)',
+                backgroundColor: pendingSimilarSearch === false ? 'rgba(239, 68, 68, 0.9)' : 'rgba(239, 68, 68, 0.6)',
                 color: '#ffffff',
                 borderColor: 'rgba(255, 255, 255, 0.3)',
+                boxShadow: `0 4px 16px rgba(239, 68, 68, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)`,
                 transform: pendingSimilarSearch === false ? 'scale(1.05)' : 'scale(1)',
               }}
             >
@@ -517,11 +744,12 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
               href={currentProduct.album_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3 py-1 text-xs font-semibold text-center rounded border"
+              className="px-3 py-1 text-xs font-semibold text-center border rounded backdrop-blur-md"
               style={{
-                backgroundColor: 'rgba(79, 70, 229, 0.8)',
+                backgroundColor: 'rgba(79, 70, 229, 0.6)',
                 color: '#ffffff',
                 borderColor: 'rgba(255, 255, 255, 0.3)',
+                boxShadow: `0 4px 16px rgba(79, 70, 229, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)`,
               }}
             >
               Yupoo
@@ -529,11 +757,12 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
             <button
               onClick={handleAllChinaBuyClick}
               disabled={isFetchingLink}
-              className="px-3 py-1 text-xs font-semibold text-center rounded border disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-1 text-xs font-semibold text-center border rounded backdrop-blur-md disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
-                backgroundColor: 'rgba(0, 190, 190, 0.8)',
+                backgroundColor: 'rgba(0, 190, 190, 0.6)',
                 color: '#ffffff',
                 borderColor: 'rgba(255, 255, 255, 0.3)',
+                boxShadow: `0 4px 16px rgba(0, 190, 190, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)`,
               }}
             >
               {isFetchingLink ? 'Fetching...' : 'AllChinaBuy'}

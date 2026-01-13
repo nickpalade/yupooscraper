@@ -1,21 +1,47 @@
 import React, { useState } from 'react';
 import { LogIn, X, Loader, Lock, User, Mail } from 'lucide-react';
 import { buildApiUrl } from './api-config';
+import { useSettings } from './SettingsContext';
 
 interface LoginModalProps {
     show: boolean;
     onClose: () => void;
     onLoginSuccess: (token: string, username: string, isAdmin: boolean) => void;
+    isSignupMode?: boolean;
+    onToggleMode?: (isSignup: boolean) => void;
 }
 
-const LoginModal: React.FC<LoginModalProps> = ({ show, onClose, onLoginSuccess }) => {
-    const [isSignup, setIsSignup] = useState(false);
+const LoginModal: React.FC<LoginModalProps> = ({ 
+    show, 
+    onClose, 
+    onLoginSuccess, 
+    isSignupMode = false,
+    onToggleMode 
+}) => {
+    const { darkMode } = useSettings();
+    const [isSignup, setIsSignup] = useState(isSignupMode);
     const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [isVisible, setIsVisible] = useState(false);
+
+    // Sync internal state with prop
+    React.useEffect(() => {
+        setIsSignup(isSignupMode);
+    }, [isSignupMode]);
+
+    // Control visibility for smooth exit animation
+    React.useEffect(() => {
+        if (show) {
+            setIsVisible(true);
+        } else {
+            const timer = setTimeout(() => setIsVisible(false), 300);
+            return () => clearTimeout(timer);
+        }
+    }, [show]);
 
     // Add dynamic placeholder styling for inputs
     React.useEffect(() => {
@@ -28,7 +54,19 @@ const LoginModal: React.FC<LoginModalProps> = ({ show, onClose, onLoginSuccess }
                 }
             `;
             document.head.appendChild(style);
-            return () => document.head.removeChild(style);
+            return () => {
+                document.head.removeChild(style);
+            };
+        }
+    }, [show]);
+
+    // Control visibility for smooth exit animation
+    React.useEffect(() => {
+        if (show) {
+            setIsVisible(true);
+        } else {
+            const timer = setTimeout(() => setIsVisible(false), 300);
+            return () => clearTimeout(timer);
         }
     }, [show]);
 
@@ -90,22 +128,47 @@ const LoginModal: React.FC<LoginModalProps> = ({ show, onClose, onLoginSuccess }
     };
 
     const toggleMode = () => {
-        setIsSignup(!isSignup);
+        const newMode = !isSignup;
+        setIsSignup(newMode);
         setError(null);
         setPassword('');
         setConfirmPassword('');
         setEmail('');
+        if (onToggleMode) {
+            onToggleMode(newMode);
+        }
     };
 
-    if (!show) return null;
+    if (!show && !isVisible) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
-            <div className="relative w-full max-w-md p-8 m-4 border shadow-2xl rounded-2xl backdrop-blur-xl" style={{
-                backgroundColor: 'var(--card-bg)',
-                borderColor: 'var(--glass-border)',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), inset 0 1px 1px 0 rgba(255, 255, 255, 0.2)',
-            }}>
+        <div 
+            className="fixed inset-0 z-50 flex items-center justify-center" 
+            style={{ 
+                backgroundColor: show 
+                  ? (darkMode ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.1)')
+                  : 'rgba(0, 0, 0, 0)',
+                backdropFilter: 'blur(8px)',
+                opacity: show ? 1 : 0,
+                pointerEvents: show ? 'auto' : 'none',
+                transition: 'opacity 300ms ease-in-out, background-color 300ms ease-in-out',
+            }}
+            onClick={onClose}
+        >
+            <div 
+                className="relative w-full max-w-md p-8 m-4 border shadow-2xl rounded-2xl" 
+                style={{
+                    backgroundColor: 'var(--glass-bg)',
+                    borderColor: 'var(--glass-border)',
+                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), inset 0 1px 1px 0 rgba(255, 255, 255, 0.2)',
+                    backdropFilter: 'blur(25px)',
+                    animation: show ? 'modalSlideIn 0.3s ease-out' : 'none',
+                    transform: show ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(-20px)',
+                    opacity: show ? 1 : 0,
+                    transition: 'all 300ms ease-in-out',
+                }}
+                onClick={(e) => e.stopPropagation()}
+            >
                 {/* Close button */}
                 <button
                     onClick={onClose}

@@ -67,6 +67,8 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
   const [adjustColorsMessage, setAdjustColorsMessage] = useState<string | null>(null);
   const [retaggingLoading, setRetaggingLoading] = useState<boolean>(false);
   const [retaggingMessage, setRetaggingMessage] = useState<string | null>(null);
+  const [cleaningUntaggedLoading, setCleaningUntaggedLoading] = useState<boolean>(false);
+  const [cleaningUntaggedMessage, setCleaningUntaggedMessage] = useState<string | null>(null);
 
   const handleAdjustColors = async () => {
     setAdjustingColorsLoading(true);
@@ -113,6 +115,30 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
       setRetaggingMessage(`Network error: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setRetaggingLoading(false);
+    }
+  };
+
+  const handleCleanUntagged = async () => {
+    setCleaningUntaggedLoading(true);
+    setCleaningUntaggedMessage(null);
+    try {
+      const response = await fetch(buildApiUrl('/api/products/clean-untagged'), {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setCleaningUntaggedMessage(`Success: Removed ${data.deleted} products without company or type tags`);
+      } else {
+        setCleaningUntaggedMessage(`Error: ${data.detail || 'Failed to clean untagged products'}`);
+      }
+    } catch (error) {
+      setCleaningUntaggedMessage(`Network error: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setCleaningUntaggedLoading(false);
     }
   };
 
@@ -201,7 +227,7 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
       {/* New button for color retagging */}
       <button
         onClick={handleRetag}
-        disabled={retaggingLoading || scrapingLoading || adjustingColorsLoading}
+        disabled={retaggingLoading || scrapingLoading || adjustingColorsLoading || cleaningUntaggedLoading}
         className="flex items-center justify-center w-full gap-2 py-3 mt-4 font-semibold text-white transition-colors border rounded-lg bg-gradient-to-r from-indigo-500 to-cyan-500 backdrop-blur-md border-white/20 hover:shadow-lg hover:shadow-indigo-500/50 disabled:bg-gray-400"
       >
         {retaggingLoading ? (
@@ -217,10 +243,29 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
         )}
       </button>
 
+      {/* Clean untagged products button */}
+      <button
+        onClick={handleCleanUntagged}
+        disabled={cleaningUntaggedLoading || scrapingLoading || adjustingColorsLoading || retaggingLoading}
+        className="flex items-center justify-center w-full gap-2 py-3 mt-4 font-semibold text-white transition-colors border rounded-lg bg-gradient-to-r from-orange-500 to-red-500 backdrop-blur-md border-white/20 hover:shadow-lg hover:shadow-orange-500/50 disabled:bg-gray-400"
+      >
+        {cleaningUntaggedLoading ? (
+          <>
+            <Loader size={20} className="animate-spin" />
+            Cleaning Untagged...
+          </>
+        ) : (
+          <>
+            <AlertTriangle size={20} />
+            Remove Items Without Brand/Type Tags
+          </>
+        )}
+      </button>
+
       {/* Clear Database button */}
       <button
         onClick={handleClearDatabase}
-        disabled={clearingDatabase || scrapingLoading || adjustingColorsLoading || retaggingLoading}
+        disabled={clearingDatabase || scrapingLoading || adjustingColorsLoading || retaggingLoading || cleaningUntaggedLoading}
         className="flex items-center justify-center w-full gap-2 py-3 mt-4 font-semibold text-white transition-colors border rounded-lg bg-gradient-to-r from-red-500 to-rose-500 backdrop-blur-md border-white/20 hover:shadow-lg hover:shadow-red-500/50 disabled:bg-gray-400"
       >
         {clearingDatabase ? (
@@ -251,6 +296,12 @@ const ScraperGUI: React.FC<ScraperGUIProps> = ({
       {retaggingMessage && (
         <div className={`flex items-center gap-2 p-4 mt-4 text-white transition-opacity border rounded-lg shadow-lg backdrop-blur-md ${retaggingMessage.startsWith('Error') ? 'bg-red-500/30 border-red-400/50 shadow-red-500/30' : 'bg-green-500/30 border-green-400/50 shadow-green-500/30'}`}>
           {retaggingMessage.startsWith('Error') ? <AlertTriangle size={20} /> : <CheckCircle size={20} />} {retaggingMessage}
+        </div>
+      )}
+
+      {cleaningUntaggedMessage && (
+        <div className={`flex items-center gap-2 p-4 mt-4 text-white transition-opacity border rounded-lg shadow-lg backdrop-blur-md ${cleaningUntaggedMessage.startsWith('Error') ? 'bg-red-500/30 border-red-400/50 shadow-red-500/30' : 'bg-green-500/30 border-green-400/50 shadow-green-500/30'}`}>
+          {cleaningUntaggedMessage.startsWith('Error') ? <AlertTriangle size={20} /> : <CheckCircle size={20} />} {cleaningUntaggedMessage}
         </div>
       )}
 

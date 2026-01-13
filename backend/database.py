@@ -334,13 +334,28 @@ def search_products_by_tags(tag_list: List[str], db_path: str = DB_NAME, sort_by
         results = filtered_results
         debug_print(f"Exclusive type search reduced results to {len(results)} products.")
 
-    # Sort by combined color percentage if specified
+    # Sort by color percentage relevance if specified
     if sort_by_colors and len(sort_by_colors) > 0 and results:
-        debug_print(f"Sorting by colors: {sort_by_colors}")
-        results.sort(
-            key=lambda x: sum(x[6].get(color.lower(), 0) for color in sort_by_colors),
-            reverse=True
-        )
+        debug_print(f"Sorting by color relevance for: {sort_by_colors}")
+        
+        # Calculate relevance score for each product
+        # Score = sum of percentages for all selected colors
+        scored_results = []
+        for product_tuple in results:
+            colors_data = product_tuple[6]  # Index 6 is colors_data
+            
+            # Calculate total percentage of selected colors
+            relevance_score = sum(colors_data.get(color.lower(), 0.0) for color in sort_by_colors)
+            
+            scored_results.append((product_tuple, relevance_score))
+        
+        # Sort by relevance score (highest percentage first)
+        scored_results.sort(key=lambda x: x[1], reverse=True)
+        
+        # Extract just the product tuples (without scores)
+        results = [product_tuple for product_tuple, score in scored_results]
+        
+        debug_print(f"Top 5 scores: {[score for _, score in scored_results[:5]]}")
     
     return results
 
@@ -364,10 +379,7 @@ def list_all_products(db_path: str = DB_NAME) -> List[Tuple[int, str, str, str, 
     result: List[Tuple[int, str, str, str, List[str], str, dict]] = []
     for row in rows:
         product_id, image_url, image_path, album_title, tags_json, album_url, colors_json = row
-        debug_print(f"  list_all_products: Processing product_id={product_id}")
-        debug_print(f"    tags_json (type={type(tags_json)}): {tags_json[:100]}...") # Print first 100 chars
         tags = json.loads(tags_json)
-        debug_print(f"    colors_json (type={type(colors_json)}): {colors_json[:100]}...") # Print first 100 chars
         colors_data = json.loads(colors_json) if colors_json else {}
         result.append((product_id, image_url, image_path, album_title, tags, album_url, colors_data))
     return result
@@ -1055,4 +1067,241 @@ def update_product_tags_and_colors(product_id: int, tags: Iterable[str], colors_
         raise
     finally:
         conn.close()
+
+
+def rgb_to_lab(rgb: Tuple[float, float, float]) -> Tuple[float, float, float]:
+    """Convert RGB to LAB color space for better perceptual color distance calculations.
+    
+    Args:
+        rgb: Tuple of (r, g, b) values in range [0, 1]
+        
+    Returns:
+        Tuple of (L, a, b) values in LAB color space
+    """
+    # Convert RGB to XYZ
+    r, g, b = rgb
+    
+    # Apply sRGB gamma correction
+    def gamma_correct(c):
+        if c > 0.04045:
+            return ((c + 0.055) / 1.055) ** 2.4
+        return c / 12.92
+    
+    r = gamma_correct(r)
+    g = gamma_correct(g)
+    b = gamma_correct(b)
+    
+    # Convert to XYZ using sRGB matrix
+    x = r * 0.4124564 + g * 0.3575761 + b * 0.1804375
+    y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750
+    z = r * 0.0193339 + g * 0.1191920 + b * 0.9503041
+    
+    # Normalize to D65 illuminant
+    x = x / 0.95047
+    y = y / 1.00000
+    z = z / 1.08883
+    
+    # Convert XYZ to LAB
+    def f(t):
+        delta = 6.0 / 29.0
+        if t > delta ** 3:
+            return t ** (1.0 / 3.0)
+        return t / (3.0 * delta ** 2) + 4.0 / 29.0
+    
+    fx = f(x)
+    fy = f(y)
+    fz = f(z)
+    
+    L = 116.0 * fy - 16.0
+    a = 500.0 * (fx - fy)
+    b_val = 200.0 * (fy - fz)
+    
+    return (L, a, b_val)
+
+
+def color_name_to_rgb(color_name: str) -> Tuple[float, float, float]:
+    """Convert a color name to approximate RGB values.
+    
+    Args:
+        color_name: Name of the color
+        
+    Returns:
+        Tuple of (r, g, b) values in range [0, 1]
+    """
+    # Expanded color mappings with more accurate RGB values
+    color_map = {
+        'black': (0.0, 0.0, 0.0),
+        'white': (1.0, 1.0, 1.0),
+        'grey': (0.5, 0.5, 0.5),
+        'gray': (0.5, 0.5, 0.5),
+        'red': (1.0, 0.0, 0.0),
+        'blue': (0.0, 0.0, 1.0),
+        'green': (0.0, 0.5, 0.0),
+        'yellow': (1.0, 1.0, 0.0),
+        'orange': (1.0, 0.5, 0.0),
+        'purple': (0.5, 0.0, 0.5),
+        'pink': (1.0, 0.75, 0.8),
+        'brown': (0.6, 0.3, 0.0),
+        'beige': (0.96, 0.96, 0.86),
+        'navy': (0.0, 0.0, 0.5),
+        'teal': (0.0, 0.5, 0.5),
+        'lime': (0.75, 1.0, 0.0),
+        'cyan': (0.0, 1.0, 1.0),
+        'magenta': (1.0, 0.0, 1.0),
+        'maroon': (0.5, 0.0, 0.0),
+        'olive': (0.5, 0.5, 0.0),
+        'silver': (0.75, 0.75, 0.75),
+        'gold': (1.0, 0.84, 0.0),
+    }
+    
+    return color_map.get(color_name.lower(), (0.5, 0.5, 0.5))  # Default to grey
+
+
+def calculate_color_similarity(colors1: dict, colors2: dict) -> float:
+    """Calculate color similarity between two products based on percentage differences.
+    
+    Simple and effective: sum the absolute differences in percentages for each color.
+    Lower values indicate more similar colors.
+    
+    Args:
+        colors1: Dictionary of {color_name: percentage} for first product
+        colors2: Dictionary of {color_name: percentage} for second product
+        
+    Returns:
+        Similarity score (lower is more similar, 0-100 scale)
+    """
+    if not colors1 or not colors2:
+        return 100.0  # Maximum dissimilarity if either has no color data
+    
+    # Get all unique color names from both products
+    all_colors = set(colors1.keys()) | set(colors2.keys())
+    
+    # Calculate sum of absolute percentage differences
+    total_difference = 0.0
+    for color in all_colors:
+        percentage1 = colors1.get(color, 0.0)
+        percentage2 = colors2.get(color, 0.0)
+        total_difference += abs(percentage1 - percentage2)
+    
+    # The total difference can range from 0 (identical) to 200 (completely different colors)
+    # Normalize to 0-100 scale
+    normalized_score = total_difference / 2.0
+    
+    return normalized_score
+
+
+def find_similar_products_by_color(product_id: int, limit: int = 50, same_brand: bool = False, db_path: str = DB_NAME) -> List[Tuple[int, str, str, str, List[str], str, dict, float]]:
+    """Find products with similar colors to the given product, filtered by same clothing type.
+    
+    Args:
+        product_id: The ID of the product to find similar items for
+        limit: Maximum number of results to return
+        same_brand: If True, only return products from the same brand
+        db_path: Path to the SQLite database file
+        
+    Returns:
+        List of tuples (id, image_url, image_path, album_title, tags, album_url, colors_data, similarity_score)
+        sorted by similarity (most similar first)
+    """
+    # Get the reference product
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, image_url, image_path, album_title, tags_json, album_url, colors_json FROM products WHERE id = ?;",
+        (product_id,)
+    )
+    reference_row = cursor.fetchone()
+    
+    if not reference_row:
+        conn.close()
+        return []
+    
+    ref_id, ref_image_url, ref_image_path, ref_album_title, ref_tags_json, ref_album_url, ref_colors_json = reference_row
+    ref_tags = json.loads(ref_tags_json)
+    ref_colors = json.loads(ref_colors_json) if ref_colors_json else {}
+    
+    # Extract type tags and brand tags from reference product
+    ref_type_tags = [tag for tag in ref_tags if tag.startswith('type_')]
+    ref_brand_tags = [tag for tag in ref_tags if tag.startswith('company_')]
+    
+    debug_print(f"Finding similar products for product {product_id}")
+    debug_print(f"  Reference colors: {ref_colors}")
+    debug_print(f"  Reference type tags: {ref_type_tags}")
+    debug_print(f"  Reference brand tags: {ref_brand_tags}")
+    debug_print(f"  Same brand filter: {same_brand}")
+    
+    if not ref_type_tags:
+        debug_print("  Warning: Reference product has no type tags, returning empty results")
+        conn.close()
+        return []
+    
+    # Get all products with at least one matching type tag
+    # Build query to find products with matching type tags
+    type_tag_conditions = []
+    params = []
+    for type_tag in ref_type_tags:
+        type_tag_conditions.append("INSTR(tags_json, ?) > 0")
+        params.append(f'"{type_tag}"')
+    
+    # Include the reference product itself to validate algorithm (should be first with score 0)
+    
+    type_tag_query = " OR ".join(type_tag_conditions)
+    
+    # Add brand filter if requested
+    if same_brand and ref_brand_tags:
+        brand_conditions = []
+        for brand_tag in ref_brand_tags:
+            brand_conditions.append("INSTR(tags_json, ?) > 0")
+            params.append(f'"{brand_tag}"')
+        brand_query = " OR ".join(brand_conditions)
+        query = f"""
+            SELECT id, image_url, image_path, album_title, tags_json, album_url, colors_json 
+            FROM products 
+            WHERE ({type_tag_query}) AND ({brand_query});
+        """
+    else:
+        query = f"""
+            SELECT id, image_url, image_path, album_title, tags_json, album_url, colors_json 
+            FROM products 
+            WHERE ({type_tag_query});
+        """
+    
+    cursor.execute(query, params)
+    candidate_rows = cursor.fetchall()
+    conn.close()
+    
+    debug_print(f"  Found {len(candidate_rows)} candidate products with matching type tags")
+    
+    # Calculate similarity scores for each candidate
+    results = []
+    for row in candidate_rows:
+        cand_id, cand_image_url, cand_image_path, cand_album_title, cand_tags_json, cand_album_url, cand_colors_json = row
+        cand_tags = json.loads(cand_tags_json)
+        cand_colors = json.loads(cand_colors_json) if cand_colors_json else {}
+        
+        # Calculate color similarity score
+        similarity_score = calculate_color_similarity(ref_colors, cand_colors)
+        
+        results.append((
+            cand_id,
+            cand_image_url,
+            cand_image_path,
+            cand_album_title,
+            cand_tags,
+            cand_album_url,
+            cand_colors,
+            similarity_score
+        ))
+    
+    # Sort by similarity score (lower is more similar)
+    results.sort(key=lambda x: x[7])
+    
+    # Limit results
+    results = results[:limit]
+    
+    debug_print(f"  Returning {len(results)} similar products")
+    if results:
+        debug_print(f"  Top 3 similarity scores: {[r[7] for r in results[:3]]}")
+    
+    return results
 

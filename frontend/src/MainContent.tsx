@@ -26,6 +26,7 @@ interface MainContentProps {
   setSortByColor: (color: string[]) => void; // Changed from string | null to string[]
   products: Product[];
   showViewAll: boolean;
+  totalProductsCount: number;
   currentPage: number;
   setCurrentPage: (page: number) => void;
   itemsPerPage: number;
@@ -42,6 +43,8 @@ interface MainContentProps {
   isAuthenticated?: boolean;
   authToken?: string | null;
   onLoginRequired?: () => void;
+  isInSimilarSearchMode?: boolean;
+  onBackToPreviousResults?: () => void;
 }
 
 const MainContent: React.FC<MainContentProps> = ({
@@ -64,6 +67,7 @@ const MainContent: React.FC<MainContentProps> = ({
   setSortByColor,
   products,
   showViewAll,
+  totalProductsCount,
   currentPage,
   setCurrentPage,
   itemsPerPage,
@@ -80,6 +84,8 @@ const MainContent: React.FC<MainContentProps> = ({
   isAuthenticated = false,
   authToken = null,
   onLoginRequired = () => {},
+  isInSimilarSearchMode = false,
+  onBackToPreviousResults = () => {}
 }) => {
   const resultsRef = useRef<HTMLDivElement>(null);
   const [isScrolling, setIsScrolling] = React.useState(false);
@@ -291,13 +297,13 @@ const MainContent: React.FC<MainContentProps> = ({
                   disabled={searchLoading}
                   className="flex items-center justify-center w-full gap-2 py-3 font-semibold text-white transition-all glass-button"
                   style={{
-                    backgroundImage: 'linear-gradient(135deg, #4f46e5 0%, #a855f7 50%, #6366f1 100%)',
+                    backgroundImage: 'linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #b91c1c 100%)',
                     color: 'var(--button-text)',
                     borderColor: 'var(--glass-border)',
                   }}
                 >
                   <Eye size={20} />
-                  {searchLoading ? 'Loading...' : `View All Products (${products.length > 0 ? products.length : '?'})`}
+                  {searchLoading ? 'Loading...' : `View All Products (${totalProductsCount > 0 ? totalProductsCount : '?'})`}
                 </button>
               </div>
             </div>
@@ -347,9 +353,21 @@ const MainContent: React.FC<MainContentProps> = ({
                     <option value={60}>60</option>
                     <option value={120}>120</option>
                     <option value={300}>300</option>
-                    <option value={600}>600</option>
                   </select>
                 </div>
+                {isInSimilarSearchMode && (
+                  <button
+                    onClick={onBackToPreviousResults}
+                    className="px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 glass-button hover:shadow-lg"
+                    style={{
+                      backgroundImage: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%)',
+                      color: 'white',
+                      border: 'none'
+                    }}
+                  >
+                    ← Back to Previous Results
+                  </button>
+                )}
                 <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} />
               </div>
             </div>

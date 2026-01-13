@@ -1,15 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, X, StickyNote, ExternalLink } from 'lucide-react';
+import { Plus, Trash2, Edit2, X, PenSquare, ExternalLink } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Product } from './types';
 import ProductCard from './ProductCard';
 import { buildApiUrl } from './api-config';
+import ConfirmDialog from './ConfirmDialog';
+import { useSettings } from './SettingsContext';
 
 interface MyListsProps {
     authToken: string | null;
     isAuthenticated: boolean;
     onLoginRequired: () => void;
     onImageClick: (image: string, title: string, productId?: number) => void;
+    onSimilarSearch: (product: Product, sameBrand: boolean) => void;
+    mobileGridCols: number;
+    setMobileGridCols: (cols: number) => void;
+    onListProductsChange: (products: Product[]) => void;
 }
 
 interface List {
@@ -24,9 +31,13 @@ interface SavedProduct {
     saved_at: string;
 }
 
-const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRequired, onImageClick }) => {
+const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRequired, onImageClick, onSimilarSearch, mobileGridCols, setMobileGridCols, onListProductsChange }) => {
+    const { darkMode } = useSettings();
+    const { listName } = useParams<{ listName?: string }>();
+    const navigate = useNavigate();
     const [lists, setLists] = useState<List[]>([]);
     const [selectedListId, setSelectedListId] = useState<number | null>(null);
+    const [listNotFound, setListNotFound] = useState(false);
     const [products, setProducts] = useState<SavedProduct[]>([]);
     const [loading, setLoading] = useState(false);
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -39,12 +50,84 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
     const [deletingListId, setDeleteingListId] = useState<number | null>(null);
     const [editingNotes, setEditingNotes] = useState('');
     const [editingSavedProductId, setEditingSavedProductId] = useState<number | null>(null);
+    const [removingProductId, setRemovingProductId] = useState<number | null>(null);
+    const [showRemoveProductConfirm, setShowRemoveProductConfirm] = useState(false);
+
+    // Visibility states for exit animations
+    const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
+    const [isRenameModalVisible, setIsRenameModalVisible] = useState(false);
+    const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = useState(false);
+    const [isNotesModalVisible, setIsNotesModalVisible] = useState(false);
+
+    // Handle visibility for exit animations
+    useEffect(() => {
+        if (showCreateModal) {
+            setIsCreateModalVisible(true);
+        } else {
+            const timer = setTimeout(() => setIsCreateModalVisible(false), 300);
+            return () => clearTimeout(timer);
+        }
+    }, [showCreateModal]);
+
+    useEffect(() => {
+        if (showRenameModal) {
+            setIsRenameModalVisible(true);
+        } else {
+            const timer = setTimeout(() => setIsRenameModalVisible(false), 300);
+            return () => clearTimeout(timer);
+        }
+    }, [showRenameModal]);
+
+    useEffect(() => {
+        if (showDeleteConfirm) {
+            setIsDeleteConfirmVisible(true);
+        } else {
+            const timer = setTimeout(() => setIsDeleteConfirmVisible(false), 300);
+            return () => clearTimeout(timer);
+        }
+    }, [showDeleteConfirm]);
+
+    useEffect(() => {
+        if (showNotesModal) {
+            setIsNotesModalVisible(true);
+        } else {
+            const timer = setTimeout(() => setIsNotesModalVisible(false), 300);
+            return () => clearTimeout(timer);
+        }
+    }, [showNotesModal]);
 
     useEffect(() => {
         if (isAuthenticated && authToken) {
             loadLists();
         }
     }, [isAuthenticated, authToken]);
+
+    // Sync selectedListId with URL params
+    useEffect(() => {
+        if (lists.length === 0) return;
+        
+        if (listName) {
+            // Find list by name from URL
+            const list = lists.find(l => encodeURIComponent(l.list_name.toLowerCase().replace(/\s+/g, '-')) === listName);
+            if (list) {
+                setSelectedListId(list.list_id);
+                setListNotFound(false);
+            } else {
+                // List doesn't exist, show error and redirect
+                setListNotFound(true);
+                setTimeout(() => {
+                    navigate('/lists');
+                }, 2000);
+            }
+        } else {
+            // No list in URL, select first list and update URL
+            if (lists.length > 0 && !selectedListId) {
+                const firstList = lists[0];
+                const urlName = encodeURIComponent(firstList.list_name.toLowerCase().replace(/\s+/g, '-'));
+                navigate(`/lists/${urlName}`, { replace: true });
+            }
+        }
+    }, [listName, lists, navigate]);
 
     useEffect(() => {
         if (selectedListId && authToken) {
@@ -59,9 +142,6 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                 headers: { 'Authorization': `Bearer ${authToken}` }
             });
             setLists(response.data.lists);
-            if (response.data.lists.length > 0 && !selectedListId) {
-                setSelectedListId(response.data.lists[0].list_id);
-            }
         } catch (error) {
             console.error('Failed to load lists:', error);
         } finally {
@@ -75,7 +155,9 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
             const response = await axios.get(buildApiUrl(`/api/user/lists/${listId}/products`), {
                 headers: { 'Authorization': `Bearer ${authToken}` }
             });
+            const loadedProducts = response.data.products.map((sp: SavedProduct) => sp.product);
             setProducts(response.data.products);
+            onListProductsChange(loadedProducts);
         } catch (error) {
             console.error('Failed to load products:', error);
         } finally {
@@ -94,13 +176,16 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                 headers: { 'Authorization': `Bearer ${authToken}` }
             });
             
-            setLists(prev => [...prev, { 
+            const newList = { 
                 list_id: response.data.list_id, 
                 list_name: response.data.list_name 
-            }]);
+            };
+            setLists(prev => [...prev, newList]);
             setNewListName('');
             setShowCreateModal(false);
-            setSelectedListId(response.data.list_id);
+            // Navigate to new list
+            const urlName = encodeURIComponent(newList.list_name.toLowerCase().replace(/\s+/g, '-'));
+            navigate(`/lists/${urlName}`);
         } catch (error: any) {
             alert(error.response?.data?.detail || 'Failed to create list');
         }
@@ -117,11 +202,19 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                 headers: { 'Authorization': `Bearer ${authToken}` }
             });
             
-            setLists(prev => prev.map(list => 
+            const updatedLists = lists.map(list => 
                 list.list_id === editingListId 
                     ? { ...list, list_name: renameListName.trim() }
                     : list
-            ));
+            );
+            setLists(updatedLists);
+            
+            // If renamed list is selected, update URL
+            if (selectedListId === editingListId) {
+                const urlName = encodeURIComponent(renameListName.trim().toLowerCase().replace(/\s+/g, '-'));
+                navigate(`/lists/${urlName}`, { replace: true });
+            }
+            
             setShowRenameModal(false);
             setRenameListName('');
             setEditingListId(null);
@@ -138,11 +231,18 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                 headers: { 'Authorization': `Bearer ${authToken}` }
             });
             
-            setLists(prev => prev.filter(list => list.list_id !== deletingListId));
+            const remainingLists = lists.filter(list => list.list_id !== deletingListId);
+            setLists(remainingLists);
+            
             if (selectedListId === deletingListId) {
-                const remainingLists = lists.filter(list => list.list_id !== deletingListId);
-                setSelectedListId(remainingLists.length > 0 ? remainingLists[0].list_id : null);
+                if (remainingLists.length > 0) {
+                    const urlName = encodeURIComponent(remainingLists[0].list_name.toLowerCase().replace(/\s+/g, '-'));
+                    navigate(`/lists/${urlName}`, { replace: true });
+                } else {
+                    navigate('/lists', { replace: true });
+                }
             }
+            
             setShowDeleteConfirm(false);
             setDeleteingListId(null);
         } catch (error: any) {
@@ -153,15 +253,24 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
     const handleRemoveProduct = async (productId: number) => {
         if (!selectedListId) return;
         
-        if (!confirm('Remove this product from the list?')) return;
+        setRemovingProductId(productId);
+        setShowRemoveProductConfirm(true);
+    };
+
+    const confirmRemoveProduct = async () => {
+        if (!selectedListId || removingProductId === null) return;
 
         try {
-            await axios.delete(buildApiUrl(`/api/user/lists/${selectedListId}/products/${productId}`), {
+            await axios.delete(buildApiUrl(`/api/user/lists/${selectedListId}/products/${removingProductId}`), {
                 headers: { 'Authorization': `Bearer ${authToken}` }
             });
-            setProducts(prev => prev.filter(p => p.product.id !== productId));
+            setProducts(prev => prev.filter(p => p.product.id !== removingProductId));
+            const updatedProducts = products.filter(p => p.product.id !== removingProductId).map(sp => sp.product);
+            onListProductsChange(updatedProducts);
         } catch (error: any) {
             alert(error.response?.data?.detail || 'Failed to remove product');
+        } finally {
+            setRemovingProductId(null);
         }
     };
 
@@ -193,6 +302,11 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
         setEditingSavedProductId(savedProductId);
         setEditingNotes(currentNotes || '');
         setShowNotesModal(true);
+    };
+
+    const handleListClick = (list: List) => {
+        const urlName = encodeURIComponent(list.list_name.toLowerCase().replace(/\s+/g, '-'));
+        navigate(`/lists/${urlName}`);
     };
 
     if (!isAuthenticated) {
@@ -227,6 +341,13 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
     return (
         <div className="container px-4 py-8 mx-auto">
             <h1 style={{ color: 'var(--text-color)' }} className="mb-8 text-3xl font-bold">My Lists</h1>
+
+            {listNotFound && (
+                <div className="p-4 mb-6 border rounded-lg" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.3)', color: 'var(--text-color)' }}>
+                    <p className="font-semibold">❌ List not found</p>
+                    <p className="text-sm opacity-75">The list you're looking for doesn't exist</p>
+                </div>
+            )}
 
             <div className="grid gap-6 lg:grid-cols-4">
                 {/* Lists Sidebar */}
@@ -266,7 +387,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                                             borderColor: selectedListId === list.list_id ? 'var(--glass-border)' : 'rgba(255, 255, 255, 0.1)'
                                         }}
                                         className={`p-3 rounded-lg transition-all cursor-pointer group border hover:bg-opacity-75 backdrop-blur-md`}
-                                        onClick={() => setSelectedListId(list.list_id)}
+                                        onClick={() => handleListClick(list)}
                                     >
                                         <div className="flex items-center justify-between">
                                             <span style={{ color: selectedListId === list.list_id ? 'var(--primary-color)' : 'var(--text-color)' }} className={`${selectedListId === list.list_id ? 'font-semibold' : ''}`}>{list.list_name}</span>
@@ -307,7 +428,15 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                 <div className="lg:col-span-3">
                     {selectedList ? (
                         <>
-                            <h2 className="mb-4 text-2xl font-bold" style={{ color: 'var(--text-color)' }}>{selectedList.list_name}</h2>
+                            <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                                <h2 className="text-2xl font-bold" style={{ color: 'var(--text-color)' }}>{selectedList.list_name}</h2>
+                                <div className="flex items-center gap-2 p-1 rounded-lg md:hidden" style={{ backgroundColor: 'var(--card-bg)' }}>
+                                    <span className="ml-2 text-sm font-medium font-semibold" style={{ color: 'var(--text-color)' }}>WIDTH:</span>
+                                    <button onClick={() => setMobileGridCols(1)} className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors glass-button ${mobileGridCols === 1 ? 'shadow' : ''}`} style={{ backgroundColor: mobileGridCols === 1 ? 'var(--primary-color)' : 'transparent', color: mobileGridCols === 1 ? 'var(--button-text)' : 'var(--text-color)', borderColor: 'var(--glass-border)' }}>1</button>
+                                    <button onClick={() => setMobileGridCols(2)} className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors glass-button ${mobileGridCols === 2 ? 'shadow' : ''}`} style={{ backgroundColor: mobileGridCols === 2 ? 'var(--primary-color)' : 'transparent', color: mobileGridCols === 2 ? 'var(--button-text)' : 'var(--text-color)', borderColor: 'var(--glass-border)' }}>2</button>
+                                    <button onClick={() => setMobileGridCols(3)} className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors glass-button ${mobileGridCols === 3 ? 'shadow' : ''}`} style={{ backgroundColor: mobileGridCols === 3 ? 'var(--primary-color)' : 'transparent', color: mobileGridCols === 3 ? 'var(--button-text)' : 'var(--text-color)', borderColor: 'var(--glass-border)' }}>3</button>
+                                </div>
+                            </div>
                             {loading ? (
                                 <div className="text-center text-white">Loading...</div>
                             ) : products.length === 0 ? (
@@ -322,14 +451,18 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                                     <p style={{ color: 'var(--text-color)' }} className="mt-2 text-sm opacity-50">Browse products and click the bookmark icon to save them here</p>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                <div className={`grid gap-4 ${
+                                    mobileGridCols === 1 ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' :
+                                    mobileGridCols === 2 ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4' :
+                                    'grid-cols-3 md:grid-cols-4'
+                                }`}>
                                     {products.map((savedProduct, index) => (
-                                        <div key={savedProduct.saved_product_id} className="relative">
+                                        <div key={savedProduct.saved_product_id} className="relative group">
                                             <ProductCard
                                                 product={savedProduct.product}
                                                 onImageClick={onImageClick}
-                                                handleSimilarSearch={() => {}}
-                                                mobileGridCols={2}
+                                                handleSimilarSearch={(sameBrand) => onSimilarSearch(savedProduct.product, sameBrand)}
+                                                mobileGridCols={mobileGridCols}
                                                 index={index}
                                                 shouldAnimate={false}
                                                 shouldShowInstantly={true}
@@ -338,7 +471,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                                                 highlighted={false}
                                                 showSaveButton={false}
                                             />
-                                            <div className="absolute flex gap-2 top-2 right-2">
+                                            <div className="absolute flex gap-2 transition-opacity duration-200 md:opacity-0 md:group-hover:opacity-100 top-2 right-2">
                                                 <button
                                                     onClick={() => openNotesModal(savedProduct.saved_product_id, savedProduct.notes)}
                                                     style={{
@@ -350,7 +483,7 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                                                     className="p-2 transition-all border rounded-lg shadow-lg backdrop-blur-md hover:opacity-80"
                                                     title={savedProduct.notes ? 'Edit notes' : 'Add notes'}
                                                 >
-                                                    <StickyNote size={18} />
+                                                    <PenSquare size={18} />
                                                 </button>
                                                 <button
                                                     onClick={() => handleRemoveProduct(savedProduct.product.id)}
@@ -397,14 +530,33 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
             </div>
 
             {/* Create List Modal */}
-            {showCreateModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
+            {(showCreateModal || isCreateModalVisible) && (
+                <div 
+                    className="fixed inset-0 z-50 flex items-center justify-center"
+                    style={{
+                        backgroundColor: showCreateModal 
+                          ? (darkMode ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.1)')
+                          : 'rgba(0, 0, 0, 0)',
+                        backdropFilter: 'blur(8px)',
+                        opacity: showCreateModal ? 1 : 0,
+                        pointerEvents: showCreateModal ? 'auto' : 'none',
+                        transition: 'opacity 300ms ease-in-out, background-color 300ms ease-in-out',
+                    }}
+                    onClick={() => setShowCreateModal(false)}
+                >
                     <div 
-                        className="w-full max-w-md p-6 m-4 border rounded-2xl backdrop-blur-2xl border-white/30"
+                        className="w-full max-w-md p-6 m-4 rounded-2xl"
                         style={{
-                            backgroundColor: 'var(--card-bg)',
-                            boxShadow: `0 8px 32px var(--glass-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.1)`
+                            backgroundColor: 'var(--glass-bg)',
+                            border: '1px solid var(--glass-border)',
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), inset 0 1px 1px 0 rgba(255, 255, 255, 0.2)',
+                            backdropFilter: 'blur(25px)',
+                            animation: showCreateModal ? 'modalSlideIn 0.3s ease-out' : 'none',
+                            transform: showCreateModal ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(-20px)',
+                            opacity: showCreateModal ? 1 : 0,
+                            transition: 'all 300ms ease-in-out',
                         }}
+                        onClick={(e) => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between mb-4">
                             <h3 style={{ color: 'var(--text-color)' }} className="text-xl font-bold">Create New List</h3>
@@ -461,14 +613,33 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
             )}
 
             {/* Rename List Modal */}
-            {showRenameModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
+            {(showRenameModal || isRenameModalVisible) && (
+                <div 
+                    className="fixed inset-0 z-50 flex items-center justify-center"
+                    style={{
+                        backgroundColor: showRenameModal 
+                          ? (darkMode ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.1)')
+                          : 'rgba(0, 0, 0, 0)',
+                        backdropFilter: 'blur(8px)',
+                        opacity: showRenameModal ? 1 : 0,
+                        pointerEvents: showRenameModal ? 'auto' : 'none',
+                        transition: 'opacity 300ms ease-in-out, background-color 300ms ease-in-out',
+                    }}
+                    onClick={() => setShowRenameModal(false)}
+                >
                     <div 
-                        className="w-full max-w-md p-6 m-4 border rounded-2xl backdrop-blur-2xl border-white/30"
+                        className="w-full max-w-md p-6 m-4 rounded-2xl"
                         style={{
-                            backgroundColor: 'var(--card-bg)',
-                            boxShadow: `0 8px 32px var(--glass-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.1)`
+                            backgroundColor: 'var(--glass-bg)',
+                            border: '1px solid var(--glass-border)',
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), inset 0 1px 1px 0 rgba(255, 255, 255, 0.2)',
+                            backdropFilter: 'blur(25px)',
+                            animation: showRenameModal ? 'modalSlideIn 0.3s ease-out' : 'none',
+                            transform: showRenameModal ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(-20px)',
+                            opacity: showRenameModal ? 1 : 0,
+                            transition: 'all 300ms ease-in-out',
                         }}
+                        onClick={(e) => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between mb-4">
                             <h3 style={{ color: 'var(--text-color)' }} className="text-xl font-bold">Rename List</h3>
@@ -525,14 +696,33 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
             )}
 
             {/* Delete Confirmation Modal */}
-            {showDeleteConfirm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
+            {(showDeleteConfirm || isDeleteConfirmVisible) && (
+                <div 
+                    className="fixed inset-0 z-50 flex items-center justify-center"
+                    style={{
+                        backgroundColor: showDeleteConfirm 
+                          ? (darkMode ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.1)')
+                          : 'rgba(0, 0, 0, 0)',
+                        backdropFilter: 'blur(8px)',
+                        opacity: showDeleteConfirm ? 1 : 0,
+                        pointerEvents: showDeleteConfirm ? 'auto' : 'none',
+                        transition: 'opacity 300ms ease-in-out, background-color 300ms ease-in-out',
+                    }}
+                    onClick={() => setShowDeleteConfirm(false)}
+                >
                     <div 
-                        className="w-full max-w-md p-6 m-4 border rounded-2xl backdrop-blur-2xl border-white/30"
+                        className="w-full max-w-md p-6 m-4 rounded-2xl"
                         style={{
-                            backgroundColor: 'var(--card-bg)',
-                            boxShadow: `0 8px 32px var(--glass-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.1)`
+                            backgroundColor: 'var(--glass-bg)',
+                            border: '1px solid var(--glass-border)',
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), inset 0 1px 1px 0 rgba(255, 255, 255, 0.2)',
+                            backdropFilter: 'blur(25px)',
+                            animation: showDeleteConfirm ? 'modalSlideIn 0.3s ease-out' : 'none',
+                            transform: showDeleteConfirm ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(-20px)',
+                            opacity: showDeleteConfirm ? 1 : 0,
+                            transition: 'all 300ms ease-in-out',
                         }}
+                        onClick={(e) => e.stopPropagation()}
                     >
                         <h3 style={{ color: 'var(--text-color)' }} className="mb-4 text-xl font-bold">Delete List?</h3>
                         <p style={{ color: 'var(--text-color)' }} className="mb-6 opacity-70">
@@ -567,14 +757,33 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
             )}
 
             {/* Notes Modal */}
-            {showNotesModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
+            {(showNotesModal || isNotesModalVisible) && (
+                <div 
+                    className="fixed inset-0 z-50 flex items-center justify-center"
+                    style={{
+                        backgroundColor: showNotesModal 
+                          ? (darkMode ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.1)')
+                          : 'rgba(0, 0, 0, 0)',
+                        backdropFilter: 'blur(8px)',
+                        opacity: showNotesModal ? 1 : 0,
+                        pointerEvents: showNotesModal ? 'auto' : 'none',
+                        transition: 'opacity 300ms ease-in-out, background-color 300ms ease-in-out',
+                    }}
+                    onClick={() => setShowNotesModal(false)}
+                >
                     <div 
-                        className="w-full max-w-md p-6 m-4 border rounded-2xl backdrop-blur-2xl border-white/30"
+                        className="w-full max-w-md p-6 m-4 rounded-2xl"
                         style={{
-                            backgroundColor: 'var(--card-bg)',
-                            boxShadow: `0 8px 32px var(--glass-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.1)`
+                            backgroundColor: 'var(--glass-bg)',
+                            border: '1px solid var(--glass-border)',
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), inset 0 1px 1px 0 rgba(255, 255, 255, 0.2)',
+                            backdropFilter: 'blur(25px)',
+                            animation: showNotesModal ? 'modalSlideIn 0.3s ease-out' : 'none',
+                            transform: showNotesModal ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(-20px)',
+                            opacity: showNotesModal ? 1 : 0,
+                            transition: 'all 300ms ease-in-out',
                         }}
+                        onClick={(e) => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between mb-4">
                             <h3 style={{ color: 'var(--text-color)' }} className="text-xl font-bold">Product Notes</h3>
@@ -628,6 +837,21 @@ const MyLists: React.FC<MyListsProps> = ({ authToken, isAuthenticated, onLoginRe
                     </div>
                 </div>
             )}
+
+            {/* Remove Product Confirmation Dialog */}
+            <ConfirmDialog
+                isOpen={showRemoveProductConfirm}
+                onClose={() => {
+                    setShowRemoveProductConfirm(false);
+                    setRemovingProductId(null);
+                }}
+                onConfirm={confirmRemoveProduct}
+                title="Remove Product"
+                message="Are you sure you want to remove this product from the list?"
+                confirmText="Remove"
+                cancelText="Cancel"
+                isDanger={true}
+            />
         </div>
     );
 };

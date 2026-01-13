@@ -27,13 +27,6 @@ from typing import Iterable, List, Tuple
 
 from . import translator
 
-# Try to import advanced models
-try:
-    from transformers import pipeline  # type: ignore
-    HAS_TRANSFORMERS = True
-except ImportError:
-    HAS_TRANSFORMERS = False
-
 
 def debug_print(message: str):
     """Print debug message with flush to ensure it appears in concurrent output."""
@@ -48,32 +41,10 @@ def debug_print(message: str):
         print(f"[VISION DEBUG] {safe_msg}", flush=True)
 
 
-# Initialize models (lazy loading)
-_image_classifier = None
-
-
-def get_image_classifier():
-    """Get or initialize image classification pipeline."""
-    global _image_classifier
-    if not HAS_TRANSFORMERS:
-        debug_print("Transformers not available. Install with: pip install transformers torch pillow")
-        return None
-    
-    if _image_classifier is None:
-        debug_print("Loading image classification model (first time, this may take a moment)...")
-        try:
-            _image_classifier = pipeline("image-classification", model="google/vit-base-patch16-224")
-            debug_print("Image classifier loaded successfully")
-        except Exception as e:
-            debug_print(f"Failed to load image classifier: {e}")
-            return None
-    
-    return _image_classifier
-
-
 def _detect_clothing_items(image: np.ndarray) -> List[Tuple[str, Tuple[int, int, int, int]]]:
     """
     Detect clothing items and their bounding boxes in an image.
+    This function is currently not implemented.
     
     Args:
         image: BGR image array
@@ -81,102 +52,8 @@ def _detect_clothing_items(image: np.ndarray) -> List[Tuple[str, Tuple[int, int,
     Returns:
         List of (item_name, bounding_box) tuples where bounding_box is (x1, y1, x2, y2)
     """
-    model = get_yolo_model()
-    if model is None:
-        return []
-    
-    try:
-        results = model(image, verbose=False)
-        
-        clothing_item_map = {
-            'tie': 'tie',
-            'backpack': 'backpack',
-            'handbag': 'handbag',
-            'shoe': 'shoes',
-            'boots': 'boots',
-            'hat': 'hat',
-            'cap': 'cap',
-            'jacket': 'jacket',
-            'coat': 'coat',
-            'sweater': 'sweater',
-            'hoodie': 'hoodie',
-            'pants': 'trousers',
-            'jeans': 'jeans',
-            'shorts': 'shorts',
-            'skirt': 'skirt',
-            'dress': 'dress',
-            'shirt': 'shirt',
-            't-shirt': 'tshirt',
-            'tshirt': 'tshirt',
-            'undershirt': 'undershirt',
-            'sock': 'socks',
-            'glove': 'gloves',
-            'scarf': 'scarf',
-            'belt': 'belt',
-            'watch': 'watch',
-            'glasses': 'glasses',
-            'sunglasses': 'sunglasses',
-            'vest': 'vest',
-            'polo': 'polo',
-            'sweatshirt': 'sweatshirt'
-        }
-        
-        items = []
-        if results and len(results) > 0:
-            result = results[0]
-            if hasattr(result, 'names') and hasattr(result, 'boxes'):
-                # Blacklist items that shouldn't be tagged
-                blacklist_items = {
-                    'suitcase', 'umbrella', 'potted plant', 'toilet', 'cell phone',
-                    'clock', 'frisbee', 'horse'
-                }
-                
-                # Print raw YOLO detections
-                raw_detections = []
-                debug_print(f"[REALL RAW YOLO DETECTIONS] {results}")
-                for box in result.boxes:
-                    class_id = int(box.cls[0])
-                    class_name = result.names[class_id].lower()
-                    confidence = float(box.conf[0]) if hasattr(box, 'conf') else 0
-                    raw_detections.append(f"{class_name}({confidence:.2f})")
-                
-                debug_print(f"[RAW YOLO DETECTIONS] {raw_detections}")
-                debug_print(f"[CLOTHING_ITEM_MAP] Keys: {list(clothing_item_map.keys())}")
-                debug_print(f"[BLACKLIST_ITEMS] {blacklist_items}")
-                
-                debug_print(f"  [TAGGING] Processing {len(result.boxes)} detected objects")
-                
-                for idx, box in enumerate(result.boxes):
-                    class_id = int(box.cls[0])
-                    class_name = result.names[class_id].lower()
-                    confidence = float(box.conf[0]) if hasattr(box, 'conf') else 0
-                    
-                    debug_print(f"    [{idx+1}] Class: {class_name}")
-                    
-                    # Skip blacklisted non-clothing items
-                    if class_name in blacklist_items:
-                        debug_print(f"      -> BLACKLISTED (skipping)")
-                        continue
-                    
-                    # Map to standardized clothing name
-                    item_name = clothing_item_map.get(class_name, class_name)
-                    debug_print(f"      -> Mapped to: {item_name}")
-                    
-                    # Get bounding box coordinates
-                    xyxy = box.xyxy[0]
-                    x1, y1, x2, y2 = int(xyxy[0]), int(xyxy[1]), int(xyxy[2]), int(xyxy[3])
-                    
-                    items.append((item_name, (x1, y1, x2, y2)))
-                    debug_print(f"      -> ADDED to items list")
-                
-                debug_print(f"  [TAGGING RESULT] {len(items)} items will be processed for colors/attributes")
-        else:
-            debug_print(f"  [TAGGING] No results from YOLO")
-        
-        return items
-    except Exception as e:
-        debug_print(f"Error detecting clothing items: {e}")
-        return []
+    # Object detection not currently implemented
+    return []
 
 
 def _get_item_colors(image: np.ndarray, bbox: Tuple[int, int, int, int], item_name: str) -> List[str]:
@@ -226,70 +103,6 @@ def _get_item_colors(image: np.ndarray, bbox: Tuple[int, int, int, int], item_na
         debug_print(f"  Error extracting colors for {item_name}: {e}")
     
     return color_tags
-
-
-def _get_clothing_attributes(image: np.ndarray, items: List[Tuple[str, Tuple[int, int, int, int]]]) -> List[str]:
-    """
-    Generate clothing attribute tags using Vision Transformer.
-    
-    Args:
-        image: BGR image array
-        items: List of detected clothing items
-        
-    Returns:
-        List of attribute tags like ["fit_slim", "material_cotton", "style_casual"]
-    """
-    attribute_tags = []
-    
-    classifier = get_image_classifier()
-    if classifier is None:
-        debug_print("  Image classifier unavailable, skipping attribute detection")
-        return attribute_tags
-    
-    try:
-        # Convert BGR to RGB
-        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        
-        # Resize for more consistent results
-        rgb_image_resized = cv2.resize(rgb_image, (224, 224))
-        
-        # Get predictions
-        predictions = classifier(rgb_image_resized, top_k=10)
-        
-        if predictions:
-            debug_print(f"  Top clothing attributes:")
-            
-            # Map common ImageNet classes to clothing attributes
-            attribute_keywords = {
-                'casual': ['casual', 'relaxed', 'informal'],
-                'formal': ['formal', 'dress', 'business', 'tuxedo', 'suit'],
-                'sporty': ['sporty', 'athletic', 'gym', 'sport', 'activewear'],
-                'vintage': ['vintage', 'retro', 'old', 'aged'],
-                'modern': ['modern', 'contemporary', 'sleek', 'minimalist'],
-                'elegant': ['elegant', 'sophisticated', 'luxury', 'classy'],
-                'trendy': ['trendy', 'fashionable', 'stylish', 'chic'],
-                'oversized': ['oversized', 'loose', 'baggy'],
-                'slim': ['slim', 'fitted', 'tight'],
-                'layered': ['layered', 'stacked']
-            }
-            
-            for pred in predictions[:5]:
-                label = pred['label'].lower()
-                score = pred['score']
-                
-                if score > 0.1:
-                    for attr_name, keywords in attribute_keywords.items():
-                        if any(keyword in label for keyword in keywords):
-                            tag = f"style_{attr_name}"
-                            if tag not in attribute_tags:
-                                attribute_tags.append(tag)
-                                debug_print(f"    Added: {tag} (confidence: {score:.2f})")
-                            break
-    
-    except Exception as e:
-        debug_print(f"  Error in attribute detection: {e}")
-    
-    return attribute_tags
 
 
 def detect_clothing_in_image(image_url: str) -> Tuple[bool, str]:
@@ -609,45 +422,18 @@ def _get_item_colors(image: np.ndarray, bbox: Tuple[int, int, int, int], item_na
 
 
 def _get_clothing_attributes(image: np.ndarray, items: List[Tuple[str, Tuple[int, int, int, int]]]) -> List[str]:
-    """Generate clothing attribute tags using Vision Transformer."""
-    attribute_tags = []
-    classifier = get_image_classifier()
-    if classifier is None:
-        return attribute_tags
+    """Generate clothing attribute tags.
+    This function is currently not implemented.
     
-    try:
-        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        rgb_image_resized = cv2.resize(rgb_image, (224, 224))
-        predictions = classifier(rgb_image_resized, top_k=10)
+    Args:
+        image: BGR image array
+        items: List of detected clothing items
         
-        if predictions:
-            attribute_keywords = {
-                'casual': ['casual', 'relaxed', 'informal'],
-                'formal': ['formal', 'dress', 'business', 'tuxedo', 'suit'],
-                'sporty': ['sporty', 'athletic', 'gym', 'sport', 'activewear'],
-                'vintage': ['vintage', 'retro', 'old', 'aged'],
-                'modern': ['modern', 'contemporary', 'sleek', 'minimalist'],
-                'elegant': ['elegant', 'sophisticated', 'luxury', 'classy'],
-                'trendy': ['trendy', 'fashionable', 'stylish', 'chic'],
-                'oversized': ['oversized', 'loose', 'baggy'],
-                'slim': ['slim', 'fitted', 'tight'],
-            }
-            
-            for pred in predictions[:5]:
-                label = pred['label'].lower()
-                score = pred['score']
-                if score > 0.1:
-                    for attr_name, keywords in attribute_keywords.items():
-                        if any(keyword in label for keyword in keywords):
-                            tag = f"style_{attr_name}"
-                            if tag not in attribute_tags:
-                                attribute_tags.append(tag)
-                                debug_print(f"    {tag} ({score:.2f})") 
-                            break
-    except Exception as e:
-        debug_print(f"  Attribute error: {e}")
-    
-    return attribute_tags
+    Returns:
+        List of attribute tags like ["fit_slim", "material_cotton", "style_casual"]
+    """
+    # Advanced attribute detection not currently implemented
+    return []
 
 
 def generate_tags_for_image(url: str, album_title: str = "") -> Tuple[List[str], dict]:
